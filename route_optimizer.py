@@ -10,6 +10,7 @@ import json
 import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta
+from urllib.parse import quote
 import requests
 from dotenv import load_dotenv
 
@@ -215,6 +216,42 @@ def calculate_fuel_cost(distance_m):
     return fuel_cost
 
 
+def generate_google_maps_url(route_info):
+    """
+    Generate a Google Maps URL that opens the route in Google Maps app/web.
+
+    Args:
+        route_info: Dictionary containing 'addresses' list from the route
+
+    Returns:
+        String URL that can be opened in browser or shared
+    """
+    addresses = route_info['addresses']
+
+    if len(addresses) < 2:
+        return None
+
+    # URL-encode addresses for safe URL inclusion
+    origin = quote(addresses[0])
+    destination = quote(addresses[-1])
+
+    # Build waypoints parameter (all addresses between first and last)
+    waypoints = []
+    if len(addresses) > 2:
+        for addr in addresses[1:-1]:
+            waypoints.append(quote(addr))
+
+    # Construct the Google Maps URL
+    base_url = "https://www.google.com/maps/dir/?api=1"
+    url = f"{base_url}&origin={origin}&destination={destination}&travelmode=driving"
+
+    if waypoints:
+        waypoints_param = '|'.join(waypoints)
+        url += f"&waypoints={waypoints_param}"
+
+    return url
+
+
 def main():
     """Main function to run the route optimizer."""
     # Initialize cache directory
@@ -294,6 +331,18 @@ def main():
         print(f"Distance Saved:      {distance_saved:.2f} km ({distance_saved / (original_route['distance_m'] / 1000) * 100:.1f}%)")
         print(f"Time Saved:          {format_duration(abs(time_saved))} ({'saved' if time_saved > 0 else 'added'})")
         print(f"Fuel Cost Saved:     €{fuel_savings:.2f} ({fuel_savings / original_fuel_cost * 100:.1f}%)")
+        print("=" * 60)
+
+        # Generate and display Google Maps URL for optimized route
+        print()
+        print("=" * 60)
+        print("GOOGLE MAPS LINK (Optimized Route)")
+        print("=" * 60)
+        google_maps_url = generate_google_maps_url(optimized_route)
+        print(f"Open this link to view the optimized route in Google Maps:")
+        print()
+        print(google_maps_url)
+        print()
         print("=" * 60)
 
     except Exception as e:
