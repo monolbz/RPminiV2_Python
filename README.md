@@ -53,19 +53,39 @@ GOOGLE_MAPS_API_KEY=your_api_key_here
 
 Get your API key from: https://console.cloud.google.com/google/maps-apis
 
+### 6. Create Input File
+
+Copy the example input file and add your addresses:
+
+```bash
+cp input.txt.example input.txt
+```
+
+**Windows:**
+```bash
+copy input.txt.example input.txt
+```
+
+Edit `input.txt` with your addresses (one per line):
+- First line: Starting point
+- Following lines: Destinations to visit
+- Minimum: 2 addresses
+- Maximum: 26 addresses (1 origin + 25 waypoints)
+- No duplicate addresses allowed
+
 ## Usage
 
-### Basic Usage
+### Basic Usage (Using input.txt)
 
-Run with the default Madrid addresses:
+Run with addresses from `input.txt`:
 
 ```bash
 python route_optimizer.py
 ```
 
-### Custom Addresses
+### Custom Addresses (Command Line)
 
-Provide your own addresses as command-line arguments:
+Provide your own addresses as command-line arguments (overrides `input.txt`):
 
 ```bash
 python route_optimizer.py "Address 1" "Address 2" "Address 3" "Address 4"
@@ -129,8 +149,10 @@ You can adjust these constants in `route_optimizer.py`:
 RPminiV2_Python/
 ├── route_optimizer.py    # Main script
 ├── requirements.txt      # Python dependencies
-├── .env                  # API keys (not committed)
-├── .cache/              # API response cache (auto-created)
+├── input.txt.example     # Example input file (committed)
+├── input.txt            # Your addresses (gitignored, create from example)
+├── .env                 # API keys (gitignored)
+├── .cache/              # API response cache (gitignored, auto-created)
 └── README.md            # This file
 ```
 
