@@ -252,6 +252,63 @@ def generate_google_maps_url(route_info):
     return url
 
 
+def read_addresses_from_file(filename='input.txt'):
+    """
+    Read addresses from a text file.
+
+    Args:
+        filename: Path to the input file (default: 'input.txt')
+
+    Returns:
+        List of addresses (strings)
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist
+        ValueError: If the file is empty or has less than 2 addresses
+    """
+    filepath = Path(filename)
+
+    if not filepath.exists():
+        raise FileNotFoundError(f"Input file '{filename}' not found")
+
+    addresses = []
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        for line in f:
+            # Strip whitespace and skip empty lines
+            line = line.strip()
+            if line:
+                addresses.append(line)
+
+    if len(addresses) < 2:
+        raise ValueError(f"Input file must contain at least 2 addresses (found {len(addresses)})")
+
+    if len(addresses) > 26:
+        raise ValueError(f"Input file cannot contain more than 26 addresses (found {len(addresses)}). Google Maps API supports a maximum of 25 waypoints plus 1 origin.")
+
+    # Check for duplicate addresses (case-insensitive, whitespace-normalized)
+    normalized_addresses = {}
+    duplicates = []
+
+    for i, addr in enumerate(addresses, 1):
+        # Normalize: lowercase and strip extra whitespace
+        normalized = ' '.join(addr.lower().split())
+
+        if normalized in normalized_addresses:
+            # Found duplicate
+            original_line = normalized_addresses[normalized]
+            duplicates.append(f"  - Line {original_line}: {addresses[original_line - 1]}")
+            duplicates.append(f"  - Line {i}: {addr}")
+        else:
+            normalized_addresses[normalized] = i
+
+    if duplicates:
+        duplicates_str = '\n'.join(duplicates)
+        raise ValueError(f"Duplicate addresses found in input file:\n{duplicates_str}")
+
+    return addresses
+
+
 def main():
     """Main function to run the route optimizer."""
     # Initialize cache directory
@@ -262,22 +319,26 @@ def main():
     print("=" * 60)
     print()
 
-    # Example addresses - replace with your actual addresses
-    addresses = [
-        "Calle de Hortaleza 63, 28004 Madrid, Spain",
-        "Calle del Barquillo 15, 28004 Madrid, Spain",
-        "Calle de Velázquez 72, 28001 Madrid, Spain",
-        "Calle de San Bernardo 122, 28015 Madrid, Spain",
-        "Calle de Génova 27, 28004 Madrid, Spain",
-        "Calle de Jorge Juan 12, 28001 Madrid, Spain",
-        "Calle de Embajadores 181, 28045 Madrid, Spain",
-        "Calle de Goya 25, 28001 Madrid, Spain"
-    ]
-
-    # You can also read from command line arguments
+    # Priority: Command line arguments > input.txt file
     if len(sys.argv) > 1:
+        # Use command line arguments
         addresses = sys.argv[1:]
+        print("Using addresses from command line arguments")
+    else:
+        # Read from input.txt file
+        try:
+            addresses = read_addresses_from_file('input.txt')
+            print("Using addresses from input.txt")
+        except FileNotFoundError:
+            print("Error: input.txt file not found")
+            print("Please create an input.txt file with one address per line,")
+            print("or provide addresses as command line arguments.")
+            sys.exit(1)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
 
+    print()
     print("Input addresses:")
     for i, addr in enumerate(addresses, 1):
         print(f"  {i}. {addr}")
