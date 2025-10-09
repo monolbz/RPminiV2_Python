@@ -80,7 +80,7 @@ Edit `input.txt` with your addresses (one per line):
 Run with addresses from `input.txt`:
 
 ```bash
-python route_optimizer.py
+python run_optimizer.py
 ```
 
 ### Custom Addresses (Command Line)
@@ -88,7 +88,7 @@ python route_optimizer.py
 Provide your own addresses as command-line arguments (overrides `input.txt`):
 
 ```bash
-python route_optimizer.py "Address 1" "Address 2" "Address 3" "Address 4"
+python run_optimizer.py "Address 1" "Address 2" "Address 3" "Address 4"
 ```
 
 ### Example Output
@@ -137,24 +137,40 @@ Fuel Cost Saved:     €0.87 (26.8%)
 
 ## Configuration
 
-You can adjust these constants in `route_optimizer.py`:
+You can adjust these constants:
 
-- `FUEL_CONSUMPTION_L_PER_100KM`: Fuel consumption rate (default: 8.5 L/100km)
-- `FUEL_PRICE_EUR_PER_L`: Fuel price (default: €1.50/L)
-- `CACHE_EXPIRY_DAYS`: Cache validity period (default: 30 days)
+- `FUEL_CONSUMPTION_L_PER_100KM` in `route_optimizer/utils.py`: Fuel consumption rate (default: 8.5 L/100km)
+- `FUEL_PRICE_EUR_PER_L` in `route_optimizer/utils.py`: Fuel price (default: €1.50/L)
+- `CACHE_EXPIRY_DAYS` in `route_optimizer/cache.py`: Cache validity period (default: 30 days)
 
 ## Project Structure
 
 ```
 RPminiV2_Python/
-├── route_optimizer.py    # Main script
-├── requirements.txt      # Python dependencies
-├── input.txt.example     # Example input file (committed)
-├── input.txt            # Your addresses (gitignored, create from example)
-├── .env                 # API keys (gitignored)
-├── .cache/              # API response cache (gitignored, auto-created)
-└── README.md            # This file
+├── route_optimizer/          # Main package (modular structure)
+│   ├── __init__.py          # Package initialization
+│   ├── main.py              # Main application logic and display
+│   ├── api.py               # Google Maps API integration
+│   ├── cache.py             # Cache management
+│   ├── utils.py             # Utility functions (calculations, formatting, URLs)
+│   └── input_handler.py     # Input file reading and validation
+├── run_optimizer.py         # Entry point script
+├── requirements.txt         # Python dependencies
+├── input.txt.example        # Example input file (committed)
+├── input.txt               # Your addresses (gitignored, create from example)
+├── .env                    # API keys (gitignored)
+├── .cache/                 # API response cache (gitignored, auto-created)
+└── README.md               # This file
 ```
+
+### Modular Architecture Benefits
+
+The new modular structure (v2.0.0) provides:
+- **Separation of Concerns**: Each module handles a specific responsibility
+- **Better Testability**: Individual components can be tested in isolation
+- **Easier Maintenance**: Changes are localized to specific modules
+- **Code Reusability**: Modules can be imported and used independently
+- **Team Collaboration**: Multiple developers can work on different modules
 
 ## Dependencies
 
