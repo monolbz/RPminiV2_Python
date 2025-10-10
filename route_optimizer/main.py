@@ -8,7 +8,7 @@ import sys
 from .cache import init_cache
 from .api import optimize_route
 from .utils import format_duration, calculate_fuel_cost, generate_google_maps_url, FUEL_CONSUMPTION_L_PER_100KM
-from .input_handler import read_addresses_from_file
+from .input_handler import read_addresses_from_file, validate_address
 
 
 def main():
@@ -26,6 +26,14 @@ def main():
         # Use command line arguments
         addresses = sys.argv[1:]
         print("Using addresses from command line arguments")
+
+        # Validate each command-line address
+        for i, addr in enumerate(addresses, 1):
+            is_valid, error_msg = validate_address(addr, i)
+            if not is_valid:
+                print(f"Error: Invalid address format in command line argument #{i}:")
+                print(f"  {error_msg}")
+                sys.exit(1)
     else:
         # Read from input.txt file
         try:
