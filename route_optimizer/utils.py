@@ -45,6 +45,7 @@ def calculate_fuel_cost(distance_m):
 def generate_google_maps_url(route_info):
     """
     Generate a Google Maps URL that opens the route in Google Maps app/web.
+    Uses the slash-separated format which supports unlimited waypoints.
 
     Args:
         route_info: Dictionary containing 'addresses' list from the route
@@ -57,22 +58,12 @@ def generate_google_maps_url(route_info):
     if len(addresses) < 2:
         return None
 
-    # URL-encode addresses for safe URL inclusion
-    origin = quote(addresses[0])
-    destination = quote(addresses[-1])
+    # URL-encode each address and build slash-separated path
+    # Format: https://www.google.com/maps/dir/addr1/addr2/addr3/
+    encoded_addresses = [quote(addr, safe='') for addr in addresses]
 
-    # Build waypoints parameter (all addresses between first and last)
-    waypoints = []
-    if len(addresses) > 2:
-        for addr in addresses[1:-1]:
-            waypoints.append(quote(addr))
-
-    # Construct the Google Maps URL
-    base_url = "https://www.google.com/maps/dir/?api=1"
-    url = f"{base_url}&origin={origin}&destination={destination}&travelmode=driving"
-
-    if waypoints:
-        waypoints_param = '|'.join(waypoints)
-        url += f"&waypoints={waypoints_param}"
+    # Construct the Google Maps URL with slash-separated addresses
+    base_url = "https://www.google.com/maps/dir"
+    url = f"{base_url}/{'/'.join(encoded_addresses)}/"
 
     return url
