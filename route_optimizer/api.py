@@ -105,7 +105,26 @@ def get_route_with_waypoints(origin, waypoints, optimize=False):
 
         return result
     else:
-        raise ValueError(f"Google Maps API error: {data['status']}")
+        # Enhanced error handling for NOT_FOUND and other errors
+        error_msg = f"Google Maps API error: {data['status']}"
+    
+        # Try to identify which address failed
+        if 'geocoded_waypoints' in data:
+            failed_addresses = []
+            all_addresses = [origin] + waypoints
+            
+            for i, waypoint in enumerate(data['geocoded_waypoints']):
+                if waypoint.get('geocoder_status') != 'OK':
+                    failed_addresses.append(f"  - Address {i+1}: {all_addresses[i]}")
+                    failed_addresses.append(f"    Status: {waypoint.get('geocoder_status')}")
+            
+            if failed_addresses:
+                error_msg += "\n\nInvalid or not found addresses:\n" + "\n".join(failed_addresses)
+        
+        if 'error_message' in data:
+            error_msg += f"\n\nAPI Message: {data['error_message']}"
+        
+        raise ValueError(error_msg)
 
 
 def optimize_route(addresses):
