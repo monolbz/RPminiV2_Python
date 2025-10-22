@@ -195,6 +195,53 @@ This project uses a virtual environment to isolate dependencies:
 2. All dependencies managed via `requirements.txt`
 3. VSCode configured to use `.\venv\Scripts\python.exe`
 
+## WhatsApp Business Integration
+
+This project now includes a WhatsApp Business webhook server that allows users to interact with the route optimizer via WhatsApp messages!
+
+### Features
+- 📱 Receive route requests via WhatsApp
+- 🤖 Automated message processing and replies
+- 🔐 Secure webhook with signature verification
+- ⏱️ Smart 24-hour conversation window tracking
+- 📊 Comprehensive logging and monitoring
+
+### Quick Start
+
+1. **Set up WhatsApp credentials** in `.env`:
+   ```env
+   WHATSAPP_VERIFY_TOKEN=your_verify_token
+   WHATSAPP_ACCESS_TOKEN=your_access_token
+   WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+   ```
+
+2. **Start the webhook server**:
+   ```bash
+   python wab/run_webhook.py
+   ```
+
+3. **For local testing with ngrok**:
+   ```bash
+   ngrok http 5000
+   ```
+
+### Documentation
+
+For complete setup instructions, API documentation, and troubleshooting, see:
+- [WhatsApp Webhook Documentation](wab/README.md)
+
+### Integration Status
+
+- ✅ **Phase 1 (Complete)**: Core webhook functionality
+  - Receive messages from WhatsApp
+  - Process incoming messages
+  - Send replies back to users
+
+- ⏳ **Phase 2 (Coming Soon)**: Route optimizer integration
+  - Parse addresses from WhatsApp messages
+  - Automatically optimize routes
+  - Send results back via WhatsApp
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -22,7 +22,7 @@ def get_route_with_waypoints(origin, waypoints, optimize=False):
 
     Args:
         origin: Starting address
-        waypoints: List of intermediate addresses
+        waypoints: List of intermediate addresses (last one will be used as destination)
         optimize: If True, Google will optimize the waypoint order
 
     Returns:
@@ -35,18 +35,30 @@ def get_route_with_waypoints(origin, waypoints, optimize=False):
     Raises:
         ValueError: If API returns an error status
     """
-    # Format waypoints parameter
-    waypoints_param = '|'.join(waypoints)
-    if optimize:
-        waypoints_param = 'optimize:true|' + waypoints_param
+    # Separate destination from intermediate waypoints to avoid double-counting
+    # Google's API expects: origin -> waypoints -> destination
+    # where destination is separate from the waypoints list
+    if len(waypoints) > 1:
+        # Multiple waypoints: last one is destination, rest are intermediate stops
+        intermediate_waypoints = waypoints[:-1]
+        destination = waypoints[-1]
+        waypoints_param = '|'.join(intermediate_waypoints)
+        if optimize:
+            waypoints_param = 'optimize:true|' + waypoints_param
+    else:
+        # Only one waypoint: it's the destination, no intermediate stops
+        destination = waypoints[0]
+        waypoints_param = ''
 
     # Create cache key from request parameters (excluding API key)
     cache_params = {
         'origin': origin,
-        'destination': waypoints[-1],
-        'waypoints': waypoints_param,
+        'destination': destination,
+        'waypoints': waypoints_param if waypoints_param else None,
         'mode': 'driving'
     }
+    # Remove None values from cache params
+    cache_params = {k: v for k, v in cache_params.items() if v is not None}
     cache_key = generate_cache_key(cache_params)
 
     # Try to get from cache
@@ -57,6 +69,13 @@ def get_route_with_waypoints(origin, waypoints, optimize=False):
 
     # Not in cache, make API call
     print("  Making API call...")
+    print(f"  Origin: {cache_params['origin']}")
+    print(f"  Destination: {cache_params['destination']}")
+    if 'waypoints' in cache_params:
+        print(f"  Waypoints: {cache_params['waypoints']}")
+    else:
+        print(f"  Waypoints: (none - direct route)")
+
     url = 'https://maps.googleapis.com/maps/api/directions/json'
 
     params = {
@@ -74,9 +93,14 @@ def get_route_with_waypoints(origin, waypoints, optimize=False):
         total_distance_m = 0
         total_duration_s = 0
 
-        for leg in route['legs']:
+        print(f"  API returned {len(route['legs'])} leg(s)")
+        for i, leg in enumerate(route['legs'], 1):
+            leg_dist_km = leg['distance']['value'] / 1000
+            leg_duration_min = leg['duration']['value'] / 60
+            print(f"    Leg {i}: {leg_dist_km:.2f} km, {leg_duration_min:.0f} min")
             total_distance_m += leg['distance']['value']
             total_duration_s += leg['duration']['value']
+        print(f"  Total: {total_distance_m/1000:.2f} km, {total_duration_s/60:.0f} min")
 
         # Get optimized waypoint order if optimization was requested
         waypoint_order = None
@@ -85,13 +109,25 @@ def get_route_with_waypoints(origin, waypoints, optimize=False):
 
         # Build the full route with addresses
         route_addresses = [origin]
-        if waypoint_order:
-            # Reorder waypoints according to optimization
-            for idx in waypoint_order:
-                route_addresses.append(waypoints[idx])
+
+        if len(waypoints) > 1:
+            # Multiple waypoints: reconstruct route with intermediate stops + destination
+            intermediate_waypoints = waypoints[:-1]
+            destination = waypoints[-1]
+
+            if waypoint_order:
+                # Reorder intermediate waypoints according to optimization
+                for idx in waypoint_order:
+                    route_addresses.append(intermediate_waypoints[idx])
+            else:
+                # Use original order for intermediate waypoints
+                route_addresses.extend(intermediate_waypoints)
+
+            # Add destination at the end
+            route_addresses.append(destination)
         else:
-            # Use original order
-            route_addresses.extend(waypoints)
+            # Only one waypoint: it's the destination
+            route_addresses.append(waypoints[0])
 
         result = {
             'addresses': route_addresses,
