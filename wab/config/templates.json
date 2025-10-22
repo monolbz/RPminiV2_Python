@@ -1,0 +1,29 @@
+{
+  "hello_world": {
+    "name": "hello_world",
+    "language": "en",
+    "variables_count": 0,
+    "description": "Default greeting template from WhatsApp",
+    "category": "UTILITY",
+    "example": "Hello World",
+    "notes": "This is the default template provided by WhatsApp. Use this for re-engaging users outside the 24h window."
+  },
+  "route_notification": {
+    "name": "route_notification",
+    "language": "en",
+    "variables_count": 3,
+    "description": "Notify user when their route is ready",
+    "category": "UTILITY",
+    "example": "Your route from {{1}} to {{2}} is ready! Total distance: {{3}}",
+    "notes": "This template needs to be created and approved in Meta Business Manager before use."
+  },
+  "route_error": {
+    "name": "route_error",
+    "language": "en",
+    "variables_count": 1,
+    "description": "Notify user about route optimization error",
+    "category": "UTILITY",
+    "example": "We couldn't optimize your route. Error: {{1}}. Please try again.",
+    "notes": "This template needs to be created and approved in Meta Business Manager before use."
+  }
+}
