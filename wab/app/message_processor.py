@@ -113,9 +113,12 @@ class MessageProcessor:
                 return self._handle_about_command(from_number, phone_number_id, display_name)
 
             # PHASE 2: Route optimization integration
-            # Check if this looks like a route optimization request
-            if address_parser.is_route_request(message_body):
-                logger.info("Message identified as route optimization request")
+            # Try to parse addresses - let the parser decide if it's valid
+            addresses, error = address_parser.parse_addresses(message_body)
+
+            if addresses or error:
+                # Either we got valid addresses or a parsing error - process as route request
+                logger.info("Processing as route request (valid addresses or parsing error)")
                 return self._process_route_request(message_body, from_number, phone_number_id, display_name)
 
             # Check for common greetings
@@ -151,6 +154,26 @@ class MessageProcessor:
             logger.error(f"Error processing text message: {e}", exc_info=True)
             return None
 
+    def _format_error_for_user(self, error_message):
+        """
+        Format error messages consistently for user display.
+
+        Args:
+            error_message (str): The error message
+
+        Returns:
+            str: Formatted message for WhatsApp
+        """
+        # Add ❌ prefix if not present
+        if not error_message.startswith("❌"):
+            error_message = f"❌ {error_message}"
+
+        # Add format example only for "could not find addresses" error
+        if "No fue posible encontrar las direcciones" in error_message:
+            error_message += "\n\n*Formato ejemplo:*\nCalle Mayor 1, 28013 Madrid\nPlaza España, Madrid\nGran Via 50, Madrid"
+
+        return error_message
+
     def _process_route_request(self, message_body, from_number, phone_number_id, display_name):
         """
         Process a route optimization request.
@@ -171,9 +194,9 @@ class MessageProcessor:
             addresses, error = address_parser.parse_addresses(message_body)
 
             if error:
-                # Failed to parse addresses
+                # Failed to parse addresses - use consolidated error formatter
                 logger.warning(f"Failed to parse addresses: {error}")
-                reply_text = f"❌ {error}\n\n*Formato ejemplo:*\nCalle Mayor 1, 28013, Madrid\nPlaza España, Madrid\nGran Via 50, Madrid"
+                reply_text = self._format_error_for_user(error)
                 return self._create_response(from_number, phone_number_id, reply_text)
 
             # Send initial acknowledgment
@@ -240,7 +263,7 @@ class MessageProcessor:
             "*Tips:*\n"
             "✅ Comprueba bien tus direcciones al ingresarlas para evitar errores\n"
             "✅ Sé específico (calle + número + CP + ciudad)\n"
-            "🔝 Para mejores resultados, incluye el código postal (CP) y la ciudad\n\n"
+            "✅ Para mejores resultados, incluye el código postal (CP) y la ciudad\n\n"
             "¿Necesitas un ejemplo? Envía /ejemplo"
         )
         return self._create_response(from_number, phone_number_id, reply_text)
@@ -248,7 +271,7 @@ class MessageProcessor:
     def _handle_example_command(self, from_number, phone_number_id, display_name):
         """Handle /example command."""
         reply_text = (
-            "📝 *Ejemplos de formatos:*\n\n"
+            "📝 *Ejemplos de formato:*\n\n"
             "*Ejemplo 1 - Separado por línea:*\n"
             "Paseo de la Castellana 50, 28046 Madrid\n"
             "Calle Mayor 14, 28013 Madrid\n"
@@ -276,7 +299,7 @@ class MessageProcessor:
             "🔗 Integración con Google Maps\n\n"
             "*¿Cómo funciona?*\n"
             "1. Envías tus direcciones\n"
-            "2. Calculo la ruta más eficiente\n"
+            "2. Calcula la ruta más eficiente\n"
             "3. ¡Ahorras tiempo y combustible! 🚗💨\n\n"
             "*¿Necesitas ayuda?*\n"
             "Envía /ayuda para instrucciones\n\n"
