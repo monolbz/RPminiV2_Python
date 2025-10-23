@@ -9,6 +9,15 @@ from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+# Spanish road types for address detection
+SPANISH_ROAD_TYPES = [
+    'ALAMEDA', 'AVENIDA', 'CALLE', 'CAMINO', 'COSTANILLA', 'COLONIA',
+    'CARRERA', 'CARRETERA', 'ESTRADA', 'GLORIETA', 'MANZANA', 'PASEO',
+    'PLAZOLETA', 'PLAZA', 'POLÍGONO', 'PASILLO', 'PASAJE', 'PARQUE',
+    'PLAZUELA', 'RAMAL', 'RAMBLA', 'RONDA', 'RIBERA', 'TRANSVERSAL',
+    'TRAVESÍA', 'URBANIZACIÓN', 'VIA', 'ZONA'
+]
+
 
 class AddressParser:
     """Parses addresses from text messages."""
@@ -46,6 +55,32 @@ class AddressParser:
             # Clean the message
             text = message_text.strip()
 
+            # Check if this looks like an address input attempt
+            # Require at least ONE strong indicator to avoid treating gibberish as addresses
+            has_multiple_lines = '\n' in text
+            has_commas = ',' in text
+
+            # Check for Spanish road types (case-insensitive)
+            text_upper = text.upper()
+            has_spanish_road_type = any(road_type in text_upper for road_type in SPANISH_ROAD_TYPES)
+
+            # Check for Spanish ZIP code pattern (01000-52999)
+            # First 2 digits: province code 01-52
+            # Last 3 digits: any number 000-999
+            has_spanish_zipcode = bool(re.search(r'\b(0[1-9]|[1-4][0-9]|5[0-2])\d{3}\b', text))
+
+            # Check for common city names and English road types (for international addresses)
+            address_keywords = ['madrid', 'barcelona', 'valencia', 'sevilla', 'bilbao',
+                               'street', 'avenue', 'road']
+            has_keywords = any(keyword in text.lower() for keyword in address_keywords)
+
+            # If no indicators present, this is probably not an address attempt
+            # Return (None, None) to trigger fallback message in message_processor
+            if not (has_multiple_lines or has_commas or has_spanish_road_type or
+                    has_spanish_zipcode or has_keywords):
+                logger.info(f"Text lacks address indicators, returning None to trigger fallback")
+                return None, None
+
             # Try different parsing methods
             addresses = None
 
@@ -53,28 +88,36 @@ class AddressParser:
             addresses = self._parse_line_separated(text)
 
             # Method 2: If method 1 failed, try numbered list
-            if not addresses or len(addresses) < self.min_addresses:
+            if not addresses:
                 addresses = self._parse_numbered_list(text)
 
             # Validate results
             if not addresses:
-                return None, "Could not find any addresses. Please send addresses one per line or as a numbered list."
+                return None, "No fue posible encontrar las direcciones. Por favor ingrésalas en el formato correcto."
 
-            if len(addresses) < self.min_addresses:
-                return None, f"I need at least {self.min_addresses} addresses to optimize a route. You provided {len(addresses)}."
+            if len(addresses) < self.min_addresses or len(addresses) > self.max_addresses:
+                return None, f"Recuerda ingresar entre {self.min_addresses} y {self.max_addresses} direcciones. Has enviado {len(addresses)}."
 
-            if len(addresses) > self.max_addresses:
-                return None, f"Maximum {self.max_addresses} addresses allowed. You provided {len(addresses)}. Please reduce the list."
-
-            # Clean addresses first
+            # Clean addresses and track filtered ones
             cleaned_addresses = []
+            filtered_addresses = []
             for addr in addresses:
                 cleaned = self._clean_address(addr)
                 if cleaned:
                     cleaned_addresses.append(cleaned)
+                else:
+                    filtered_addresses.append(addr)
 
             if len(cleaned_addresses) < self.min_addresses:
-                return None, f"After cleaning, only {len(cleaned_addresses)} valid addresses found. Need at least {self.min_addresses}."
+                # Build error message with info about filtered addresses
+                if filtered_addresses:
+                    # Show up to 3 filtered addresses
+                    filtered_sample = ', '.join([f'"{a}"' for a in filtered_addresses[:3]])
+                    if len(filtered_addresses) > 3:
+                        filtered_sample += f" (y {len(filtered_addresses) - 3} más)"
+                    return None, f"Después de verificar, solo {len(cleaned_addresses)} direcciones válidas encontradas. Se eliminaron: {filtered_sample}. Necesitas al menos {self.min_addresses} direcciones válidas."
+                else:
+                    return None, f"Después de verificar, solo {len(cleaned_addresses)} direcciones válidas encontradas. Necesitas al menos {self.min_addresses}."
 
             # Check for round trip (first and last address are the same)
             is_round_trip = False
@@ -128,7 +171,7 @@ class AddressParser:
         # Filter out lines that are too short to be addresses
         addresses = [line for line in lines if len(line) > 5]
 
-        return addresses if len(addresses) >= self.min_addresses else None
+        return addresses if len(addresses) > 0 else None
 
     def _parse_numbered_list(self, text):
         """Parse numbered list of addresses (1. Address, 2. Address, etc.)."""
@@ -147,7 +190,7 @@ class AddressParser:
                 if len(addr) > 5:
                     addresses.append(addr)
 
-        return addresses if len(addresses) >= self.min_addresses else None
+        return addresses if len(addresses) > 0 else None
 
     def _clean_address(self, address):
         """
