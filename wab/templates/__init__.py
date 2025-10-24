@@ -1,0 +1,27 @@
+"""
+GDPR Consent Message Templates
+"""
+
+from .consent_messages import (
+    CONSENT_REQUEST,
+    CONSENT_ACCEPTED,
+    CONSENT_DECLINED,
+    CONSENT_REVOKED,
+    CONSENT_ALREADY_GIVEN,
+    CONSENT_REQUIRED_FOR_ROUTE,
+    PENDING_CONSENT_RESPONSE,
+    DATA_CONTROLLER_INFO,
+    get_consent_keywords
+)
+
+__all__ = [
+    'CONSENT_REQUEST',
+    'CONSENT_ACCEPTED',
+    'CONSENT_DECLINED',
+    'CONSENT_REVOKED',
+    'CONSENT_ALREADY_GIVEN',
+    'CONSENT_REQUIRED_FOR_ROUTE',
+    'PENDING_CONSENT_RESPONSE',
+    'DATA_CONTROLLER_INFO',
+    'get_consent_keywords',
+]
