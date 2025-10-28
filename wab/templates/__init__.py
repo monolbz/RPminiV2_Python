@@ -1,5 +1,5 @@
 """
-GDPR Consent Message Templates
+GDPR Consent Message Templates and Privacy Policy
 """
 
 from .consent_messages import (
@@ -14,7 +14,17 @@ from .consent_messages import (
     get_consent_keywords
 )
 
+from .privacy_policy_short import (
+    PRIVACY_POLICY_SHORT,
+    PRIVACY_SUMMARY,
+    PRIVACY_KEY_POINTS,
+    DPO_CONTACT,
+    AEPD_INFO,
+    get_privacy_message
+)
+
 __all__ = [
+    # Consent messages
     'CONSENT_REQUEST',
     'CONSENT_ACCEPTED',
     'CONSENT_DECLINED',
@@ -24,4 +34,11 @@ __all__ = [
     'PENDING_CONSENT_RESPONSE',
     'DATA_CONTROLLER_INFO',
     'get_consent_keywords',
+    # Privacy policy
+    'PRIVACY_POLICY_SHORT',
+    'PRIVACY_SUMMARY',
+    'PRIVACY_KEY_POINTS',
+    'DPO_CONTACT',
+    'AEPD_INFO',
+    'get_privacy_message',
 ]
