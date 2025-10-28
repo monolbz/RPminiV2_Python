@@ -241,10 +241,6 @@ DATA_CONTROLLER_INFO = """
 *Email:* [TU_EMAIL]
 *Teléfono:* [TU_TELÉFONO]
 
-*Delegado de Protección de Datos (DPO):*
-[SI APLICA - Empresas con >250 empleados o procesamiento masivo]
-Email DPO: [EMAIL_DPO]
-
 *Autoridad de Control:*
 Agencia Española de Protección de Datos (AEPD)
 Web: https://www.aepd.es

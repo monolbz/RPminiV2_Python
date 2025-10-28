@@ -18,7 +18,6 @@ from .privacy_policy_short import (
     PRIVACY_POLICY_SHORT,
     PRIVACY_SUMMARY,
     PRIVACY_KEY_POINTS,
-    DPO_CONTACT,
     AEPD_INFO,
     get_privacy_message
 )
@@ -38,7 +37,6 @@ __all__ = [
     'PRIVACY_POLICY_SHORT',
     'PRIVACY_SUMMARY',
     'PRIVACY_KEY_POINTS',
-    'DPO_CONTACT',
     'AEPD_INFO',
     'get_privacy_message',
 ]
