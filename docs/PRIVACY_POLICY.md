@@ -13,14 +13,10 @@ De conformidad con lo establecido en el Reglamento (UE) 2016/679 del Parlamento 
 
 **Identidad del Responsable:**
 [NOMBRE COMPLETO O RAZÓN SOCIAL]
-[NIF/CIF]: [TU_NIF_O_CIF]
+**NIF/CIF:** [TU_NIF_O_CIF]
 **Dirección:** [TU_DIRECCIÓN_COMPLETA]
 **Correo electrónico:** [TU_EMAIL]
 **Teléfono:** [TU_TELÉFONO]
-
-**Delegado de Protección de Datos (DPO):**
-[SI APLICA - Obligatorio para empresas con >250 empleados o tratamiento masivo]
-Email DPO: [EMAIL_DPO]
 
 ---
 
@@ -294,9 +290,6 @@ Para cualquier consulta sobre esta política de privacidad o el tratamiento de t
 **Teléfono:** [TU_TELÉFONO]
 **WhatsApp:** Escribe "ayuda" o "privacidad"
 **Dirección:** [TU_DIRECCIÓN_COMPLETA]
-
-**Delegado de Protección de Datos (DPO):**
-[SI APLICA] Email: [EMAIL_DPO]
 
 ---
 

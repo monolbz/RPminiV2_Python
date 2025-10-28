@@ -156,25 +156,6 @@ PRIVACY_KEY_POINTS = """📋 *Puntos Clave de Privacidad*
 
 
 # =============================================================================
-# DATA PROTECTION OFFICER (DPO) INFO
-# =============================================================================
-
-DPO_CONTACT = """🛡️ *Delegado de Protección de Datos (DPO)*
-
-[SOLO SI APLICA - Empresas con >250 empleados o tratamiento masivo]
-
-*Nombre:* [NOMBRE_DPO]
-*Email:* [EMAIL_DPO]
-*Tel:* [TEL_DPO]
-
-El DPO es tu contacto para:
-• Consultas sobre protección de datos
-• Ejercicio de derechos RGPD
-• Incidencias de seguridad
-• Dudas sobre tratamiento de datos"""
-
-
-# =============================================================================
 # AEPD CONTACT INFO
 # =============================================================================
 
@@ -205,7 +186,7 @@ def get_privacy_message(version="short"):
     Get the appropriate privacy policy message.
 
     Args:
-        version: "short", "summary", "key_points", "dpo", or "aepd"
+        version: "short", "summary", "key_points", or "aepd"
 
     Returns:
         str: The requested privacy policy message
@@ -214,7 +195,6 @@ def get_privacy_message(version="short"):
         "short": PRIVACY_POLICY_SHORT,
         "summary": PRIVACY_SUMMARY,
         "key_points": PRIVACY_KEY_POINTS,
-        "dpo": DPO_CONTACT,
         "aepd": AEPD_INFO
     }
 
