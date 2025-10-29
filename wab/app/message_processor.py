@@ -2,17 +2,29 @@
 """
 Message Processor
 Processes incoming WhatsApp messages and prepares responses.
+Includes GDPR consent management.
 """
 
 from datetime import datetime
 from ..utils.logger import setup_logger
 from ..utils.conversation_tracker import ConversationTracker
 from .address_parser import AddressParser
+from .consent_manager import ConsentManager
 from ..integration.route_optimizer_bridge import route_bridge
+from ..templates import (
+    CONSENT_REQUEST,
+    CONSENT_ACCEPTED,
+    CONSENT_DECLINED,
+    CONSENT_REVOKED,
+    CONSENT_ALREADY_GIVEN,
+    CONSENT_REQUIRED_FOR_ROUTE,
+    get_consent_keywords
+)
 
 logger = setup_logger(__name__)
 conversation_tracker = ConversationTracker()
 address_parser = AddressParser()
+consent_manager = ConsentManager()
 
 
 class MessageProcessor:
@@ -112,24 +124,52 @@ class MessageProcessor:
             if message_lower in ['/about', '/info', 'about', 'info']:
                 return self._handle_about_command(from_number, phone_number_id, display_name)
 
+            # GDPR CONSENT FLOW
+            # Check if message is a consent response (accept/decline)
+            consent_response = self._check_consent_response(message_body)
+            if consent_response:
+                return self._handle_consent_response(
+                    from_number,
+                    phone_number_id,
+                    display_name,
+                    consent_response
+                )
+
             # PHASE 2: Route optimization integration
             # Try to parse addresses - let the parser decide if it's valid
             addresses, error = address_parser.parse_addresses(message_body)
 
             if addresses or error:
                 # Either we got valid addresses or a parsing error - process as route request
+                # But first, check if user has given consent
+                if not consent_manager.has_consent(from_number):
+                    logger.info(f"User {from_number} attempted route request without consent")
+                    return self._create_response(from_number, phone_number_id, CONSENT_REQUIRED_FOR_ROUTE)
+
                 logger.info("Processing as route request (valid addresses or parsing error)")
                 return self._process_route_request(message_body, from_number, phone_number_id, display_name)
 
             # Check for common greetings
             greetings = ['hello', 'hi', 'hey', 'hola', 'buenos dias', 'buenas tardes']
             if any(greeting in message_body.lower() for greeting in greetings):
+                # Check if user needs to consent
+                if not consent_manager.has_consent(from_number):
+                    logger.info(f"New user {from_number} greeted - showing consent request")
+                    return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+                # User has consent, show normal greeting
                 reply_text = f"*¡Hola {display_name}!*\n\n🦜 Soy tu asistente de rutas y te ayudaré a planificar tus entregas de manera eficiente.\n\n📍 *Inicio rápido:*\n¿Listo para empezar? ¡Envíame tus direcciones y te daré la mejor ruta! 🚀\n\n💬 *Comandos:*\n/hola - Bienvenida\n/ayuda - Instrucciones detalladas\n/ejemplo - Formato de direcciones\n/info - Acerca de esta herramienta"
                 return self._create_response(from_number, phone_number_id, reply_text)
 
             # Check for help requests
             help_keywords = ['help', 'ayuda', 'how', 'como']
             if any(keyword in message_body.lower() for keyword in help_keywords):
+                # Check if user needs to consent
+                if not consent_manager.has_consent(from_number):
+                    logger.info(f"User {from_number} requested help without consent - showing consent request")
+                    return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+                # User has consent, show normal help
                 reply_text = "🗺️ *Ayuda para optimizar rutas*\n\n¡Puedo optimizar tus rutas de entrega!\n\n*Cómo se usa:*\n1. Escribe tu lista de direcciones (una por línea)\n2. Te daré la ruta más eficiente\n3. Te daré estimaciones de distancia, tiempo y costes de combustible\n\n*Ejemplo:*\nCalle Mayor 1, Madrid\nPlaza España, Madrid\nGran Via 50, Madrid\n\n¡Envíame tus direcciones para empezar!"
                 return self._create_response(from_number, phone_number_id, reply_text)
 
@@ -249,6 +289,12 @@ class MessageProcessor:
 
     def _handle_help_command(self, from_number, phone_number_id, display_name):
         """Handle /help command."""
+        # Check if user needs to consent
+        if not consent_manager.has_consent(from_number):
+            logger.info(f"User {from_number} requested /help without consent - showing consent request")
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        # User has consent, show normal help
         reply_text = (
             "🗺️ *Optimizador de rutas - Ayuda*\n\n"
             "*Cómo se usa:*\n"
@@ -306,6 +352,91 @@ class MessageProcessor:
             "Versión: 3.0.0"
         )
         return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _check_consent_response(self, message_text):
+        """
+        Check if message is a consent accept/decline response.
+
+        Args:
+            message_text (str): User's message
+
+        Returns:
+            str: 'accept', 'decline', or None
+        """
+        keywords = get_consent_keywords()
+        message_lower = message_text.lower().strip()
+
+        # Check for accept keywords
+        if any(keyword in message_lower for keyword in keywords['accept']):
+            return 'accept'
+
+        # Check for reject keywords
+        if any(keyword in message_lower for keyword in keywords['reject']):
+            return 'decline'
+
+        return None
+
+    def _handle_consent_response(self, from_number, phone_number_id, display_name, response):
+        """
+        Handle user's consent response (accept or decline).
+
+        Args:
+            from_number (str): User's phone number
+            phone_number_id (str): WhatsApp Business phone number ID
+            display_name (str): User's display name
+            response (str): 'accept' or 'decline'
+
+        Returns:
+            dict: Response data
+        """
+        try:
+            if response == 'accept':
+                # Check if user already has consent
+                if consent_manager.has_consent(from_number):
+                    # Already has consent
+                    consent_date = consent_manager.get_consent_date(from_number)
+                    from .consent_manager import format_consent_date
+                    formatted_date = format_consent_date(consent_date, "es")
+                    reply_text = CONSENT_ALREADY_GIVEN.format(consent_date=formatted_date)
+                else:
+                    # Save new consent
+                    success = consent_manager.save_consent(
+                        from_number,
+                        consent_given=True,
+                        language="es"
+                    )
+
+                    if success:
+                        logger.info(f"Consent granted by {from_number} ({display_name})")
+                        reply_text = CONSENT_ACCEPTED
+                    else:
+                        logger.error(f"Failed to save consent for {from_number}")
+                        reply_text = "❌ Error al guardar tu consentimiento. Por favor, intenta de nuevo."
+
+            elif response == 'decline':
+                # Save consent decline
+                success = consent_manager.save_consent(
+                    from_number,
+                    consent_given=False,
+                    language="es"
+                )
+
+                if success:
+                    logger.info(f"Consent declined by {from_number} ({display_name})")
+                    reply_text = CONSENT_DECLINED
+                else:
+                    logger.error(f"Failed to save consent decline for {from_number}")
+                    reply_text = "❌ Error al procesar tu respuesta. Por favor, intenta de nuevo."
+
+            return self._create_response(from_number, phone_number_id, reply_text)
+
+        except Exception as e:
+            logger.error(f"Error handling consent response: {e}", exc_info=True)
+            return self._create_response(
+                from_number,
+                phone_number_id,
+                "❌ Error al procesar tu consentimiento. Por favor, contacta soporte."
+            )
 
     def _create_response(self, to_number, phone_number_id, message_text):
         """
