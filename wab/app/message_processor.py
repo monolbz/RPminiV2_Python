@@ -531,13 +531,14 @@ class MessageProcessor:
         keywords = get_consent_keywords()
         message_lower = message_text.lower().strip()
 
+        # IMPORTANT: Check reject keywords FIRST to avoid false positives
+        # (e.g., "no acepto" contains "acepto" but should be treated as reject)
+        if any(keyword in message_lower for keyword in keywords['reject']):
+            return 'decline'
+
         # Check for accept keywords
         if any(keyword in message_lower for keyword in keywords['accept']):
             return 'accept'
-
-        # Check for reject keywords
-        if any(keyword in message_lower for keyword in keywords['reject']):
-            return 'decline'
 
         return None
 
