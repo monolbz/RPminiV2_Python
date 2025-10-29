@@ -148,14 +148,17 @@ class MessageProcessor:
 
             # GDPR CONSENT FLOW
             # Check if message is a consent response (accept/decline)
-            consent_response = self._check_consent_response(message_body)
-            if consent_response:
-                return self._handle_consent_response(
-                    from_number,
-                    phone_number_id,
-                    display_name,
-                    consent_response
-                )
+            # IMPORTANT: Only check for consent responses if user doesn't have consent yet
+            # This prevents accidental consent changes from casual messages containing "no", "si", etc.
+            if not consent_manager.has_consent(from_number):
+                consent_response = self._check_consent_response(message_body)
+                if consent_response:
+                    return self._handle_consent_response(
+                        from_number,
+                        phone_number_id,
+                        display_name,
+                        consent_response
+                    )
 
             # PHASE 2: Route optimization integration
             # Try to parse addresses - let the parser decide if it's valid
