@@ -1,0 +1,22 @@
+⚠️ BEFORE PRODUCTION - TODO:
+
+1. Fill in placeholders:
+   [TU_NOMBRE_O_EMPRESA] → Your company name
+   [TU_EMAIL_DE_CONTACTO] → Your support email
+   [TU_NIF_O_CIF] → Your tax ID
+   [TU_DIRECCIÓN] → Your address
+   [TU_TELÉFONO] → Your phone
+   
+2. Legal review (CRITICAL!)
+   - Spanish data protection lawyer
+   - Review all consent texts
+   - Verify LOPDGDD compliance
+   
+3. Register with AEPD (if required)
+   - Check registration requirements
+   - Submit data processing registration
+   
+4. Test in real WhatsApp
+   - Send actual messages
+   - Verify formatting/emojis display
+   - Test on mobile devices
