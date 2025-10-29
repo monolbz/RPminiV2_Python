@@ -43,4 +43,10 @@ Thumbs.db
 # Files
 input.txt
 
+# WhatsApp webhook logs and data
+wab/logs/
+wab/data/sessions.json
+wab/data/*.db
+*.log
+
 # URLs

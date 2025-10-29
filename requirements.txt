@@ -1,2 +1,7 @@
+# Route Optimizer dependencies
 requests==2.31.0
 python-dotenv==1.0.0
+
+# WhatsApp Webhook dependencies
+Flask==3.0.0
+pyngrok==7.0.1
