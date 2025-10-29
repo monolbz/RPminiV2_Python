@@ -385,8 +385,8 @@ class MessageProcessor:
         """Handle /mydata command - GDPR Article 15 (Right to access)."""
         logger.info(f"User {from_number} requested their data")
 
-        # Get consent data
-        consent_data = consent_manager.export_user_consent_data(from_number)
+        # Get consent data (use get_consent_info for raw record format)
+        consent_data = consent_manager.get_consent_info(from_number)
 
         if not consent_data:
             reply_text = (
