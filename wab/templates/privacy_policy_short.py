@@ -52,19 +52,14 @@ Email: [TU_EMAIL]
 
 1️⃣ *Acceso:* Ver qué datos tenemos
    → Comando: `/mydata`
-
 2️⃣ *Rectificación:* Corregir datos incorrectos
    → Envía las direcciones correctas
-
 3️⃣ *Supresión:* Eliminar tus datos
    → Comando: `/deletedata`
-
 4️⃣ *Portabilidad:* Exportar tus datos
    → Comando: `/exportdata`
-
 5️⃣ *Oposición/Revocación:* Retirar consentimiento
    → Comando: `/revokeconsent`
-
 6️⃣ *Reclamación:* Ante la autoridad de control
    → AEPD: https://www.aepd.es | 901 100 099
 

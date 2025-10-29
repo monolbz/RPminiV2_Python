@@ -180,7 +180,7 @@ class MessageProcessor:
                     return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
 
                 # User has consent, show normal greeting
-                reply_text = f"*¡Hola {display_name}!*\n\n🦜 Soy tu asistente de rutas y te ayudaré a planificar tus entregas de manera eficiente.\n\n📍 *Inicio rápido:*\n¿Listo para empezar? ¡Envíame tus direcciones y te daré la mejor ruta! 🚀\n\n💬 *Comandos:*\n/hola - Bienvenida\n/ayuda - Instrucciones detalladas\n/ejemplo - Formato de direcciones\n/info - Acerca de esta herramienta"
+                reply_text = f"*¡Hola {display_name}!*\n\n🦜 Soy tu asistente de rutas y te ayudaré a planificar tus entregas de manera eficiente.\n\n📍 *Inicio rápido:*\n¿Listo para empezar? ¡Envíame tus direcciones y te daré la mejor ruta! 🚀\n\n💬 *Comandos:*\n/hola - Bienvenida\n/ayuda - Ver instrucciones\n/ejemplo - Formato de direcciones\n/info - Acerca de esta herramienta\n/privacy - Política de privacidad\n/mydata - Ver tus datos\n/revokeconsent - Retirar consentimiento"
                 return self._create_response(from_number, phone_number_id, reply_text)
 
             # Check for help requests

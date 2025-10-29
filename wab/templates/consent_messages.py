@@ -64,24 +64,7 @@ Puedes retirar tu consentimiento en cualquier momento escribiendo /revokeconsent
 
 CONSENT_ACCEPTED = """✅ *¡Gracias por tu consentimiento!*
 
-Ya puedes usar el servicio de optimización de rutas.
-
-📍 *¿Cómo empezar?*
-Envíame tus direcciones, una por línea:
-
-*Ejemplo:*
-Calle Mayor 1, 28013 Madrid
-Plaza España, Madrid
-Gran Vía 50, Madrid
-
-💡 *Comandos útiles:*
-/ayuda - Ver instrucciones
-/ejemplo - Ver más ejemplos
-/privacy - Ver política de privacidad
-/mydata - Ver tus datos
-/revokeconsent - Retirar consentimiento
-
-¡Listo para optimizar tus rutas! 🚀"""
+Ya puedes usar el servicio. Para empezar, escribe: *hola*"""
 
 
 # =============================================================================
