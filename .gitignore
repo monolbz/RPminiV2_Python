@@ -49,4 +49,7 @@ wab/data/sessions.json
 wab/data/*.db
 *.log
 
+# GDPR user data (should not be committed)
+wab/storage/user_consents.json
+
 # URLs
