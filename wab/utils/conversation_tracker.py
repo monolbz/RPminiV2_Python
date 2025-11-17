@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from ..utils.logger import setup_logger
+from ..utils.encryption import DataEncryptor
 
 logger = setup_logger(__name__)
 
@@ -15,6 +16,9 @@ logger = setup_logger(__name__)
 class ConversationTracker:
     """
     Tracks conversation windows to determine if free-form or template messages are needed.
+
+    Phone numbers are hashed for privacy (GDPR compliance).
+    Timestamps remain in plaintext for debugging.
     """
 
     def __init__(self, session_file=None, window_hours=24):
@@ -26,6 +30,14 @@ class ConversationTracker:
             window_hours (int): Length of conversation window in hours (default: 24)
         """
         self.window_hours = window_hours
+
+        # Initialize encryptor for phone number hashing
+        try:
+            self.encryptor = DataEncryptor()
+            logger.info("Encryption enabled for conversation tracker")
+        except Exception as e:
+            logger.warning(f"Encryption not available: {e}. Phone numbers will not be hashed.")
+            self.encryptor = None
 
         # Set session file path
         if session_file is None:
@@ -67,19 +79,45 @@ class ConversationTracker:
         except Exception as e:
             logger.error(f"Error saving sessions: {e}")
 
+    def _get_session_key(self, phone_number):
+        """
+        Get session key for a phone number.
+
+        If encryption is enabled, returns hashed key (phone_xxx).
+        Otherwise returns plain phone number (fallback).
+
+        Args:
+            phone_number (str): Plain phone number
+
+        Returns:
+            str: Hashed key or plain phone number
+        """
+        if self.encryptor:
+            return self.encryptor.hash_phone(phone_number)
+        else:
+            return phone_number
+
     def update_conversation(self, phone_number):
         """
         Update conversation timestamp for a phone number.
         Call this when receiving a message from the user.
 
         Args:
-            phone_number (str): User's phone number
+            phone_number (str): User's phone number (plain text)
+
+        Note:
+            Phone number is hashed before storage for privacy.
+            Timestamp is stored in plaintext for debugging.
         """
         try:
-            current_time = datetime.now().isoformat()
-            self.sessions[phone_number] = current_time
+            # Get hashed key for storage
+            session_key = self._get_session_key(phone_number)
 
-            logger.info(f"Updated conversation window for {phone_number}")
+            # Store current time (plaintext for debugging)
+            current_time = datetime.now().isoformat()
+            self.sessions[session_key] = current_time
+
+            logger.info(f"Updated conversation window (hashed key: {session_key[:20]}...)")
 
             # Save to file
             self._save_sessions()
@@ -95,7 +133,7 @@ class ConversationTracker:
         Check if a conversation is within the 24-hour window.
 
         Args:
-            phone_number (str): User's phone number
+            phone_number (str): User's phone number (plain text)
 
         Returns:
             bool: True if within window, False otherwise
@@ -104,13 +142,16 @@ class ConversationTracker:
             # Reload sessions from file to get latest data
             self.sessions = self._load_sessions()
 
+            # Get hashed key for lookup
+            session_key = self._get_session_key(phone_number)
+
             # Check if session exists
-            if phone_number not in self.sessions:
-                logger.info(f"No active session for {phone_number}")
+            if session_key not in self.sessions:
+                logger.info(f"No active session (hashed key: {session_key[:20]}...)")
                 return False
 
             # Get last message time
-            last_message_str = self.sessions[phone_number]
+            last_message_str = self.sessions[session_key]
             last_message_time = datetime.fromisoformat(last_message_str)
 
             # Calculate time difference
@@ -123,9 +164,9 @@ class ConversationTracker:
 
             if is_within:
                 remaining = window_duration - time_diff
-                logger.info(f"Session active for {phone_number} - {remaining} remaining")
+                logger.info(f"Session active (hashed key: {session_key[:20]}...) - {remaining} remaining")
             else:
-                logger.info(f"Session expired for {phone_number} - expired {time_diff - window_duration} ago")
+                logger.info(f"Session expired (hashed key: {session_key[:20]}...) - expired {time_diff - window_duration} ago")
 
             return is_within
 
@@ -138,16 +179,19 @@ class ConversationTracker:
         Get remaining time in conversation window.
 
         Args:
-            phone_number (str): User's phone number
+            phone_number (str): User's phone number (plain text)
 
         Returns:
             timedelta: Remaining time, or None if no active session
         """
         try:
-            if phone_number not in self.sessions:
+            # Get hashed key for lookup
+            session_key = self._get_session_key(phone_number)
+
+            if session_key not in self.sessions:
                 return None
 
-            last_message_str = self.sessions[phone_number]
+            last_message_str = self.sessions[session_key]
             last_message_time = datetime.fromisoformat(last_message_str)
 
             current_time = datetime.now()
