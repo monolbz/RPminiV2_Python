@@ -66,9 +66,9 @@ def test_incoming_message(base_url="http://localhost:5000"):
     Test incoming message webhook (POST request).
     This simulates WhatsApp sending a message to your webhook.
 
-    Note: This test will fail signature verification in production mode.
-    For local testing without WhatsApp, signature verification is bypassed
-    when WHATSAPP_APP_SECRET is not set or is placeholder value.
+    Note: As of security fix, signature verification is now MANDATORY.
+    This test will be skipped if WHATSAPP_APP_SECRET is not configured.
+    For real testing, send actual messages via WhatsApp to your configured number.
     """
     print("\n" + "=" * 60)
     print("TEST 2: Incoming Message")
@@ -77,13 +77,16 @@ def test_incoming_message(base_url="http://localhost:5000"):
     # Check if app secret is configured
     app_secret = os.getenv('WHATSAPP_APP_SECRET', 'your_app_secret_here')
 
-    if app_secret == 'your_app_secret_here':
-        print("ℹ️  WHATSAPP_APP_SECRET not set - signature verification will be skipped")
-        print("   This is OK for local testing without real WhatsApp webhooks")
+    if app_secret == 'your_app_secret_here' or not app_secret or app_secret.strip() == '':
+        print("⚠️  WHATSAPP_APP_SECRET not configured!")
+        print("   Webhook will REJECT unsigned requests (signature verification required)")
+        print("   To test with real WhatsApp: send messages to your configured number")
+        print("   Skipping this test...")
+        return
     else:
-        print("⚠️  WHATSAPP_APP_SECRET is set - signature verification is enabled")
-        print("   This test may fail because we're not signing the request")
-        print("   For testing with real WhatsApp, send actual messages to your number")
+        print("ℹ️  WHATSAPP_APP_SECRET is configured")
+        print("⚠️  This test will likely fail - we're not signing the request")
+        print("   For real testing, send actual messages via WhatsApp to your number")
 
     # Load sample payload
     sample_payload_file = Path(__file__).parent / 'sample_payload.json'
@@ -107,10 +110,8 @@ def test_incoming_message(base_url="http://localhost:5000"):
             print("✅ Message received successfully!")
         elif response.status_code == 403:
             print("❌ Message rejected (403 Forbidden)")
-            if app_secret != 'your_app_secret_here':
-                print("   → Signature verification failed (expected for local testing)")
-                print("   → To test locally, temporarily use placeholder value in .env:")
-                print("      WHATSAPP_APP_SECRET=your_app_secret_here")
+            print("   → Signature verification failed (expected - request not signed)")
+            print("   → To test properly: send real messages via WhatsApp to your number")
         else:
             print("❌ Message processing failed!")
 

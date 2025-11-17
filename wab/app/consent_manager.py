@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
 from ..utils.logger import setup_logger
+from ..utils.encryption import DataEncryptor
 
 logger = setup_logger(__name__)
 
@@ -74,6 +75,15 @@ class ConsentManager:
             storage_path = storage_dir / 'user_consents.json'
 
         self.storage_path = Path(storage_path)
+
+        # Initialize encryptor for phone number hashing (GDPR compliance)
+        try:
+            self.encryptor = DataEncryptor()
+            logger.info("Encryption enabled for consent manager")
+        except Exception as e:
+            logger.warning(f"Encryption not available: {e}. Phone numbers will not be hashed.")
+            self.encryptor = None
+
         self._ensure_storage_exists()
 
     def _ensure_storage_exists(self):
@@ -109,6 +119,24 @@ class ConsentManager:
             logger.error(f"Error saving consent data: {e}", exc_info=True)
             raise
 
+    def _get_consent_key(self, phone_number: str) -> str:
+        """
+        Get consent key for a phone number.
+
+        If encryption is enabled, returns hashed key (phone_xxx).
+        Otherwise returns plain phone number (fallback).
+
+        Args:
+            phone_number: Plain phone number
+
+        Returns:
+            str: Hashed key or plain phone number
+        """
+        if self.encryptor:
+            return self.encryptor.hash_phone(phone_number)
+        else:
+            return phone_number
+
     def has_consent(self, phone_number: str) -> bool:
         """
         Check if user has given valid consent.
@@ -121,20 +149,23 @@ class ConsentManager:
         """
         data = self._load_data()
 
-        if phone_number not in data:
+        # Get hashed key for lookup
+        consent_key = self._get_consent_key(phone_number)
+
+        if consent_key not in data:
             return False
 
-        record = data[phone_number]
+        record = data[consent_key]
 
         # Check if consent was given and not withdrawn
         consent_given = record.get('consent_given', False)
         consent_withdrawn = record.get('consent_withdrawn', False)
 
         if consent_given and not consent_withdrawn:
-            logger.info(f"User {phone_number} has valid consent")
+            logger.info(f"User (hashed key: {consent_key[:20]}...) has valid consent")
             return True
 
-        logger.info(f"User {phone_number} does not have valid consent")
+        logger.info(f"User (hashed key: {consent_key[:20]}...) does not have valid consent")
         return False
 
     def save_consent(
@@ -161,6 +192,9 @@ class ConsentManager:
         try:
             data = self._load_data()
 
+            # Get hashed key for storage
+            consent_key = self._get_consent_key(phone_number)
+
             # Create consent record
             consent_record = {
                 'consent_given': consent_given,
@@ -177,17 +211,17 @@ class ConsentManager:
             if user_agent:
                 consent_record['user_agent'] = user_agent
 
-            # Store record
-            data[phone_number] = consent_record
+            # Store record with hashed key
+            data[consent_key] = consent_record
             self._save_data(data)
 
             action = "granted" if consent_given else "declined"
-            logger.info(f"Consent {action} for user {phone_number}")
+            logger.info(f"Consent {action} (hashed key: {consent_key[:20]}...)")
 
             return True
 
         except Exception as e:
-            logger.error(f"Error saving consent for {phone_number}: {e}", exc_info=True)
+            logger.error(f"Error saving consent: {e}", exc_info=True)
             return False
 
     def revoke_consent(self, phone_number: str) -> bool:
@@ -206,21 +240,24 @@ class ConsentManager:
         try:
             data = self._load_data()
 
-            if phone_number not in data:
-                logger.warning(f"Cannot revoke consent: no record for {phone_number}")
+            # Get hashed key for lookup
+            consent_key = self._get_consent_key(phone_number)
+
+            if consent_key not in data:
+                logger.warning(f"Cannot revoke consent: no record (hashed key: {consent_key[:20]}...)")
                 return False
 
             # Mark consent as withdrawn (keep record for legal proof)
-            data[phone_number]['consent_withdrawn'] = True
-            data[phone_number]['withdrawal_date'] = datetime.now().isoformat()
+            data[consent_key]['consent_withdrawn'] = True
+            data[consent_key]['withdrawal_date'] = datetime.now().isoformat()
 
             self._save_data(data)
-            logger.info(f"Consent revoked for user {phone_number}")
+            logger.info(f"Consent revoked (hashed key: {consent_key[:20]}...)")
 
             return True
 
         except Exception as e:
-            logger.error(f"Error revoking consent for {phone_number}: {e}", exc_info=True)
+            logger.error(f"Error revoking consent: {e}", exc_info=True)
             return False
 
     def get_consent_date(self, phone_number: str) -> Optional[str]:
@@ -235,10 +272,13 @@ class ConsentManager:
         """
         data = self._load_data()
 
-        if phone_number not in data:
+        # Get hashed key for lookup
+        consent_key = self._get_consent_key(phone_number)
+
+        if consent_key not in data:
             return None
 
-        return data[phone_number].get('consent_date')
+        return data[consent_key].get('consent_date')
 
     def get_consent_info(self, phone_number: str) -> Optional[Dict[str, Any]]:
         """
@@ -251,7 +291,11 @@ class ConsentManager:
             dict: Complete consent record, or None if not found
         """
         data = self._load_data()
-        return data.get(phone_number)
+
+        # Get hashed key for lookup
+        consent_key = self._get_consent_key(phone_number)
+
+        return data.get(consent_key)
 
     def delete_consent_record(self, phone_number: str) -> bool:
         """
@@ -271,16 +315,19 @@ class ConsentManager:
         try:
             data = self._load_data()
 
-            if phone_number in data:
-                del data[phone_number]
+            # Get hashed key for lookup
+            consent_key = self._get_consent_key(phone_number)
+
+            if consent_key in data:
+                del data[consent_key]
                 self._save_data(data)
-                logger.warning(f"Consent record DELETED for {phone_number}")
+                logger.warning(f"Consent record DELETED (hashed key: {consent_key[:20]}...)")
                 return True
 
             return False
 
         except Exception as e:
-            logger.error(f"Error deleting consent record for {phone_number}: {e}", exc_info=True)
+            logger.error(f"Error deleting consent record: {e}", exc_info=True)
             return False
 
     def cleanup_expired_records(self) -> int:
@@ -361,10 +408,13 @@ class ConsentManager:
         """
         data = self._load_data()
 
-        if phone_number not in data:
+        # Get hashed key for lookup
+        consent_key = self._get_consent_key(phone_number)
+
+        if consent_key not in data:
             return None
 
-        record = data[phone_number]
+        record = data[consent_key]
 
         # Format for user-friendly export
         export_data = {
