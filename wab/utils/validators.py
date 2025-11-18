@@ -25,10 +25,10 @@ def verify_webhook_signature(payload, signature, app_secret):
         bool: True if signature is valid, False otherwise
     """
     try:
-        # If no app secret is configured, skip verification (development mode)
+        # App secret is mandatory for security - reject if not configured
         if not app_secret or app_secret == 'your_app_secret_here' or app_secret.strip() == '':
-            logger.warning("App secret not configured - skipping signature verification (NOT SECURE)")
-            return True
+            logger.error("App secret not configured - REJECTING request for security")
+            raise ValueError("Webhook signature verification requires valid WHATSAPP_APP_SECRET")
 
         # Check if signature exists
         if not signature:
