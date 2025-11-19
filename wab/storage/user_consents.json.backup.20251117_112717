@@ -1,0 +1,18 @@
+{
+  "34600123456": {
+    "consent_given": false,
+    "consent_date": "2025-11-05T09:37:19.884701",
+    "consent_withdrawn": true,
+    "withdrawal_date": "2025-11-05T09:37:19.884701",
+    "consent_version": "1.0",
+    "language": "es"
+  },
+  "34644252886": {
+    "consent_given": true,
+    "consent_date": "2025-10-29T17:17:52.395520",
+    "consent_withdrawn": false,
+    "withdrawal_date": null,
+    "consent_version": "1.0",
+    "language": "es"
+  }
+}
