@@ -7,9 +7,9 @@ Includes GDPR consent management.
 
 from datetime import datetime
 from ..utils.logger import setup_logger
-from ..utils.conversation_tracker import ConversationTracker
+from ..utils.conversation_tracker_db import ConversationTracker
 from .address_parser import AddressParser
-from .consent_manager import ConsentManager
+from .consent_manager_db import ConsentManager
 from ..integration.route_optimizer_bridge import route_bridge
 from ..templates import (
     CONSENT_REQUEST,
@@ -403,7 +403,7 @@ class MessageProcessor:
             )
         else:
             # Format consent data
-            from .consent_manager import format_consent_date
+            from .consent_manager_db import format_consent_date
             formatted_date = format_consent_date(consent_data.get('consent_date', ''), "es")
             status = "✅ Activo" if consent_data.get('consent_given') else "❌ Rechazado"
 
@@ -564,7 +564,7 @@ class MessageProcessor:
                 if consent_manager.has_consent(from_number):
                     # Already has consent
                     consent_date = consent_manager.get_consent_date(from_number)
-                    from .consent_manager import format_consent_date
+                    from .consent_manager_db import format_consent_date
                     formatted_date = format_consent_date(consent_date, "es")
                     reply_text = CONSENT_ALREADY_GIVEN.format(consent_date=formatted_date)
                 else:
