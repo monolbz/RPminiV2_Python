@@ -6,7 +6,7 @@ Sends replies back to WhatsApp users via WhatsApp Cloud API.
 
 import requests
 from ..utils.logger import setup_logger
-from ..utils.conversation_tracker import ConversationTracker
+from ..utils.conversation_tracker_db import ConversationTracker
 from ..utils.template_manager import TemplateManager
 from ..config.config import Config
 
