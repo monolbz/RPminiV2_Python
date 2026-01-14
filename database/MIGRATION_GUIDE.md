@@ -147,7 +147,7 @@ Ensure the database connection is configured:
 
 **File: `database/.env`**
 ```
-DATABASE_URL=postgresql://wab_user:@localhost@localhost:5432/wab_db?client_encoding=utf8
+DATABASE_URL=postgresql://your_username:your_password@localhost:5432/your_database?client_encoding=utf8
 ```
 
 The database-backed classes will automatically read this configuration.

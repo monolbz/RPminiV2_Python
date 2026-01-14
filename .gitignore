@@ -52,4 +52,7 @@ wab/data/*.db
 # GDPR user data (should not be committed)
 wab/storage/user_consents.json
 
+# Documentation with potential sensitive data
+docs/
+
 # URLs
