@@ -55,4 +55,8 @@ wab/storage/user_consents.json
 # Documentation with potential sensitive data
 docs/
 
+# Windows null device artifact and Claude Code temporary files
+nul
+tmpclaude-*
+
 # URLs

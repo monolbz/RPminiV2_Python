@@ -100,6 +100,24 @@ class User(Base):
         """Soft delete the user by setting deleted_at timestamp"""
         self.deleted_at = datetime.now()
 
+    def anonymize(self):
+        """
+        Anonymize personal data for GDPR Article 17 (Right to erasure).
+
+        Overwrites PII with a non-reversible numeric placeholder derived from
+        user_id, then sets deleted_at. The row is kept for FK integrity with
+        consent records (3-year retention) and audit logs (90-day retention).
+
+        Placeholder format: 14 decimal digits (passes phone_format constraint
+        and VARCHAR(20) limit). Derived from user_id so it is unique per user.
+        """
+        # 14-digit unique placeholder: user_id is the UUID PK, so
+        # int % 10^14 is unique within this database and digits-only.
+        placeholder = str(self.user_id.int % 10**14).zfill(14)
+        self.phone_number = placeholder
+        self.display_name = None
+        self.deleted_at = datetime.now()
+
 
 class Consent(Base):
     """
