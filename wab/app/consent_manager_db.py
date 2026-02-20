@@ -256,6 +256,51 @@ class ConsentManager:
             logger.error(f"Error revoking consent for {phone_number}: {e}", exc_info=True)
             return False
 
+    def anonymize_user(self, phone_number: str) -> bool:
+        """
+        Anonymize user's PII in-place (GDPR Article 17 - Right to erasure).
+
+        Replaces phone_number and display_name with a non-reversible placeholder
+        and sets deleted_at. The user row is retained for FK integrity with
+        consent records (3-year retention) and audit logs (90-day retention).
+
+        Must be called AFTER revoke_consent(), while the original phone_number
+        is still present in the users table.
+
+        Args:
+            phone_number: User's current (real) phone number
+
+        Returns:
+            bool: True if anonymised successfully, False otherwise
+        """
+        try:
+            with self.db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=phone_number
+                ).first()
+
+                if not user:
+                    logger.warning(f"Cannot anonymize: no user found for {phone_number}")
+                    return False
+
+                user.anonymize()
+
+                # Audit trail logged by user_id (phone_number is being overwritten)
+                audit = AuditLog.log_action(
+                    user_id=user.user_id,
+                    action='user_anonymized',
+                    actor='user',
+                    details={'gdpr_article': 'Art17', 'fields_cleared': ['phone_number', 'display_name']}
+                )
+                session.add(audit)
+
+                logger.info(f"User PII anonymized (GDPR Art. 17) for former phone: {phone_number}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error anonymizing user {phone_number}: {e}", exc_info=True)
+            return False
+
     def get_consent_date(self, phone_number: str) -> Optional[str]:
         """
         Get the date when user gave consent.

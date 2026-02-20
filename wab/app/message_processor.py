@@ -477,23 +477,27 @@ class MessageProcessor:
                 "ℹ️ Ya no apareces en nuestro sistema."
             )
         else:
-            # Mark consent as withdrawn (this preserves the record for legal compliance)
-            success = consent_manager.revoke_consent(from_number)
+            # Step 1: Revoke consent (while phone still findable by original number)
+            consent_revoked = consent_manager.revoke_consent(from_number)
 
-            if success:
+            # Step 2: Anonymize PII immediately (GDPR Art. 17 - Right to Erasure)
+            # Must run after revoke_consent() but before any further lookups by phone
+            data_anonymized = consent_manager.anonymize_user(from_number)
+
+            if consent_revoked and data_anonymized:
                 reply_text = (
-                    "🗑️ *Datos Marcados para Eliminación*\n\n"
+                    "🗑️ *Datos Eliminados*\n\n"
                     "✅ Tu solicitud de eliminación ha sido procesada.\n\n"
-                    "*¿Qué se eliminará?*\n"
-                    "• Tus direcciones (ya eliminadas automáticamente después de 24h)\n"
-                    "• Tus datos de sesión (eliminados en 24h)\n"
-                    "• Tu consentimiento ha sido marcado como retirado\n\n"
+                    "*¿Qué se ha eliminado?*\n"
+                    "• Tu número de teléfono (anonimizado)\n"
+                    "• Tu nombre de perfil (eliminado)\n"
+                    "• Tus datos de sesión (eliminados en 24h)\n\n"
                     "*⚠️ Nota importante:*\n"
                     "El registro de tu consentimiento se conservará 3 años por obligación legal "
-                    "(para demostrar que tuvimos tu consentimiento), pero sin tus datos personales.\n\n"
+                    "(para demostrar que tuviste nuestro consentimiento), pero sin tus datos personales.\n\n"
                     "Gracias por haber usado nuestro servicio. 🙏"
                 )
-                logger.info(f"Data deletion requested by {from_number} - consent revoked")
+                logger.info(f"GDPR Art. 17 erasure completed for {from_number}")
             else:
                 reply_text = "❌ Error al procesar tu solicitud. Por favor, intenta de nuevo o contacta soporte."
 
