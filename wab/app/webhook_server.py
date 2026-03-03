@@ -8,16 +8,21 @@ import os
 import threading
 import time
 from flask import Flask, request, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from ..utils.logger import setup_logger
-from ..utils.validators import verify_webhook_signature
 from ..utils.rate_limiter import RateLimiter, MessageLoopDetector, GlobalRateLimiter
 from ..config.config import Config
+from ..providers import get_provider
 from .message_processor import MessageProcessor
 from .message_sender import MessageSender
 
 # Initialize Flask app
 app = Flask(__name__)
+# Trust X-Forwarded-Proto and X-Forwarded-Host from reverse proxies (ngrok, Railway).
+# Required for correct Twilio signature validation behind a proxy.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 config = Config()
+provider = get_provider()
 logger = setup_logger(__name__)
 
 # Initialize message processor and sender
@@ -60,31 +65,14 @@ logger.info("Rate limiter cleanup thread started")
 @app.route('/webhook', methods=['GET'])
 def webhook_verify():
     """
-    Webhook verification endpoint for WhatsApp.
-    WhatsApp will send a GET request with verification parameters.
+    Webhook verification endpoint.
+    Meta sends a GET challenge; Twilio does not use GET verification.
+    Delegated entirely to the active provider adapter.
     """
     try:
-        # Get verification parameters from query string
-        mode = request.args.get('hub.mode')
-        token = request.args.get('hub.verify_token')
-        challenge = request.args.get('hub.challenge')
-
-        logger.info(f"Webhook verification attempt - Mode: {mode}")
-
-        # Check if verification parameters are present
-        if mode and token:
-            # Verify the mode is 'subscribe' and token matches
-            if mode == 'subscribe' and token == config.WHATSAPP_VERIFY_TOKEN:
-                logger.info("Webhook verified successfully")
-                # Respond with the challenge to complete verification
-                return challenge, 200
-            else:
-                logger.warning(f"Webhook verification failed - Invalid token")
-                return 'Forbidden', 403
-        else:
-            logger.warning("Webhook verification failed - Missing parameters")
-            return 'Bad Request', 400
-
+        logger.info(f"Webhook GET verification attempt [{config.MESSAGING_PROVIDER}]")
+        response_body, status_code = provider.verify_get(request)
+        return response_body, status_code
     except Exception as e:
         logger.error(f"Error during webhook verification: {e}")
         return 'Internal Server Error', 500
@@ -93,8 +81,8 @@ def webhook_verify():
 @app.route('/webhook', methods=['POST'])
 def webhook_receive():
     """
-    Webhook receiver endpoint for WhatsApp messages.
-    Receives POST requests with message data from WhatsApp.
+    Webhook receiver endpoint for incoming messages.
+    Signature verification and payload parsing delegated to the active provider adapter.
     """
     try:
         # Check global rate limit first (protect server resources)
@@ -106,45 +94,28 @@ def webhook_receive():
                 'message': 'Service temporarily unavailable - too many requests'
             }), 429
 
-        # Get request body
-        body = request.get_json()
-
-        # Log incoming webhook (without sensitive data)
-        logger.info(f"Webhook received - Entry count: {len(body.get('entry', []))}")
-
         # Verify webhook signature for security
-        signature = request.headers.get('X-Hub-Signature-256', '')
         try:
-            if not verify_webhook_signature(request.get_data(), signature, config.WHATSAPP_APP_SECRET):
-                logger.warning("Invalid webhook signature")
+            if not provider.verify_post_signature(request):
+                logger.warning(f"[{config.MESSAGING_PROVIDER}] Invalid webhook signature")
                 return jsonify({'status': 'error', 'message': 'Invalid signature'}), 403
         except ValueError as e:
             logger.error(f"Webhook signature verification failed: {e}")
             return jsonify({'status': 'error', 'message': 'Signature verification required'}), 403
 
-        # Process webhook entries
-        if body.get('object') == 'whatsapp_business_account':
-            for entry in body.get('entry', []):
-                for change in entry.get('changes', []):
-                    if change.get('field') == 'messages':
-                        # Extract message data
-                        value = change.get('value', {})
+        # Parse incoming messages via provider adapter.
+        # Each message is processed in a background thread so the 200 response
+        # is returned immediately (required by Twilio's 15-second webhook timeout).
+        messages = provider.parse_incoming(request)
+        for message, value in messages:
+            t = threading.Thread(target=process_incoming_message, args=(message, value), daemon=True)
+            t.start()
 
-                        # Process incoming messages
-                        if 'messages' in value:
-                            for message in value['messages']:
-                                process_incoming_message(message, value)
+        # Parse and log status updates
+        for status in provider.parse_status_updates(request):
+            process_status_update(status)
 
-                        # Process message status updates (delivered, read, etc.)
-                        if 'statuses' in value:
-                            for status in value['statuses']:
-                                process_status_update(status)
-
-            # Return success response
-            return jsonify({'status': 'success'}), 200
-        else:
-            logger.warning(f"Unknown webhook object type: {body.get('object')}")
-            return jsonify({'status': 'error', 'message': 'Unknown object type'}), 400
+        return jsonify({'status': 'success'}), 200
 
     except Exception as e:
         logger.error(f"Error processing webhook: {e}", exc_info=True)

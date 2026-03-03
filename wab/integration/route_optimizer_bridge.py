@@ -161,6 +161,75 @@ class RouteOptimizerBridge:
             logger.error(f"Error formatting route result: {e}", exc_info=True)
             return "✅ Ruta optimizada exitosamente, pero ocurrió un error al formatear los resultados. Por favor, intenta nuevamente."
 
+    def format_route_result_parts(self, result, phone_number=None):
+        """
+        Format route result as two separate parts for two-message delivery (e.g. Twilio).
+
+        Args:
+            result (dict): Route optimization result from optimize_route()
+            phone_number (str): User's phone number for logging (optional)
+
+        Returns:
+            tuple: (summary_text, maps_url) on success, (error_text, None) on failure
+        """
+        if not result['success']:
+            return f"❌ *Optimización de ruta fallida*\n\n{result['error_message']}", None
+
+        try:
+            original = result['original_route']
+            optimized = result['optimized_route']
+
+            # Calculate fuel costs and savings
+            original_fuel_cost = calculate_fuel_cost(original['distance_m'])
+            optimized_fuel_cost = calculate_fuel_cost(optimized['distance_m'])
+            fuel_savings = original_fuel_cost - optimized_fuel_cost
+
+            # Calculate savings
+            distance_saved = (original['distance_m'] - optimized['distance_m']) / 1000
+            time_saved = original['duration_s'] - optimized['duration_s']
+            savings_percent = (distance_saved / (original['distance_m'] / 1000) * 100) if original['distance_m'] > 0 else 0
+
+            # Auto-fallback: if optimized route is worse, use original route instead
+            used_fallback = False
+            if distance_saved < 0:
+                phone_log = f" [User: {phone_number}]" if phone_number else ""
+                logger.warning(f"Optimized route is longer by {abs(distance_saved):.2f} km. Using original route instead.{phone_log}")
+                optimized = original
+                optimized_fuel_cost = original_fuel_cost
+                distance_saved = 0
+                time_saved = 0
+                savings_percent = 0
+                used_fallback = True
+
+            # Build the summary message (addresses + savings, no Maps URL)
+            message = "✅ *Ruta calculada!*\n\n"
+
+            if used_fallback:
+                message += "⚠️ *La optimización no mejoró tu ruta original. Verifica tus direcciones.* \n\n"
+
+            message += "🗺️ *Nueva ruta:*\n"
+            for i, addr in enumerate(optimized['addresses'], 1):
+                message += f"{i}. {addr}\n"
+
+            if distance_saved > 0:
+                message += f"\n💚 *Ahorros vs Ruta original:*\n"
+                message += f"  • Distancia: {distance_saved:.2f} km ({savings_percent:.1f}%)\n"
+                message += f"  • Tiempo: {format_duration(abs(time_saved))}\n"
+                message += f"  • Coste de combustible: €{fuel_savings:.2f}\n"
+
+            if distance_saved == 0:
+                message += f"\n💚 *Tu ruta original ya es la más óptima*\n"
+
+            # Google Maps URL as second part
+            google_maps_url = generate_google_maps_url(optimized)
+            maps_message = f"📍 *Ver en Google Maps:*\n{google_maps_url}" if google_maps_url else None
+
+            return message, maps_message
+
+        except Exception as e:
+            logger.error(f"Error formatting route result parts: {e}", exc_info=True)
+            return "✅ Ruta optimizada exitosamente, pero ocurrió un error al formatear los resultados. Por favor, intenta nuevamente.", None
+
     def format_route_summary_short(self, result):
         """
         Format a short summary of route optimization (for quick replies).

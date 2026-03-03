@@ -5,6 +5,7 @@ Processes incoming WhatsApp messages and prepares responses.
 Includes GDPR consent management.
 """
 
+import os
 from datetime import datetime
 from ..utils.logger import setup_logger
 from ..utils.conversation_tracker_db import ConversationTracker
@@ -105,7 +106,7 @@ class MessageProcessor:
                 return self._create_response(
                     from_number,
                     phone_number_id,
-                    "I received an empty message. Please send me some text."
+                    "El mensaje está vacío. Por favor, asegúrate de incluir texto."
                 )
 
             logger.info(f"Text message content: '{message_body[:50]}...'")
@@ -274,9 +275,19 @@ class MessageProcessor:
             # Optimize the route
             result = route_bridge.optimize_route(addresses)
 
-            # Format the result for WhatsApp
-            reply_text = route_bridge.format_route_result_for_whatsapp(result, phone_number=from_number)
+            # Twilio: split into two messages to stay within the 1600-char outgoing limit.
+            # Summary (addresses + savings) first, Google Maps URL second.
+            if os.getenv('MESSAGING_PROVIDER', 'meta').lower() == 'twilio':
+                summary, maps_url = route_bridge.format_route_result_parts(result, phone_number=from_number)
+                if maps_url:
+                    from .message_sender import MessageSender
+                    MessageSender().send_reply(self._create_response(from_number, phone_number_id, summary))
+                    return self._create_response(from_number, phone_number_id, maps_url)
+                # Error or no URL — fall through to single message
+                return self._create_response(from_number, phone_number_id, summary)
 
+            # Meta (and any other provider): single combined message
+            reply_text = route_bridge.format_route_result_for_whatsapp(result, phone_number=from_number)
             return self._create_response(from_number, phone_number_id, reply_text)
 
         except Exception as e:
@@ -292,7 +303,7 @@ class MessageProcessor:
         latitude = location.get('latitude')
         longitude = location.get('longitude')
 
-        reply_text = f"Thanks for sharing your location! 📍\n\nLat: {latitude}\nLon: {longitude}\n\nLocation-based routing will be available soon!"
+        reply_text = f"Gracias por compartir tu ubicación! 📍\n\nLat: {latitude}\nLon: {longitude}\n\nEl procesamiento de ubicaciones no está disponible aun. Por favor, envíame el texto con las direcciones para optimizar la ruta."
 
         return self._create_response(from_number, phone_number_id, reply_text)
 
@@ -300,7 +311,7 @@ class MessageProcessor:
         """Process image messages (placeholder for future features)."""
         logger.info("Image message received")
 
-        reply_text = "Thanks for the image! 📷\n\nImage processing is not available yet. Please send text addresses for route optimization."
+        reply_text = "Gracias por la imagen! 📷\n\nEl procesamiento de imágenes no está disponible aun. Por favor, envíame el texto con las direcciones para optimizar la ruta."
 
         return self._create_response(from_number, phone_number_id, reply_text)
 
@@ -308,7 +319,7 @@ class MessageProcessor:
         """Process document messages (placeholder for future features)."""
         logger.info("Document message received")
 
-        reply_text = "Thanks for the document! 📄\n\nDocument processing is not available yet. Please send text addresses for route optimization."
+        reply_text = "Gracias por el documento! 📄\n\nEl procesamiento de documentos no está disponible aun. Por favor, envíame el texto con las direcciones para optimizar la ruta."
 
         return self._create_response(from_number, phone_number_id, reply_text)
 

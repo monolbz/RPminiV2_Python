@@ -17,12 +17,20 @@ class Config:
     """Configuration class for WhatsApp webhook server."""
 
     def __init__(self):
-        # WhatsApp API Configuration
+        # Messaging provider: 'meta' (default) or 'twilio'
+        self.MESSAGING_PROVIDER = os.getenv('MESSAGING_PROVIDER', 'meta').lower()
+
+        # WhatsApp Cloud API Configuration (Meta)
         self.WHATSAPP_VERIFY_TOKEN = os.getenv('WHATSAPP_VERIFY_TOKEN', '')
         self.WHATSAPP_ACCESS_TOKEN = os.getenv('WHATSAPP_ACCESS_TOKEN', '')
         self.WHATSAPP_PHONE_NUMBER_ID = os.getenv('WHATSAPP_PHONE_NUMBER_ID', '')
         self.WHATSAPP_BUSINESS_ACCOUNT_ID = os.getenv('WHATSAPP_BUSINESS_ACCOUNT_ID', '')
         self.WHATSAPP_APP_SECRET = os.getenv('WHATSAPP_APP_SECRET', '')
+
+        # Twilio WhatsApp Sandbox Configuration
+        self.TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', '')
+        self.TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', '')
+        self.TWILIO_WHATSAPP_NUMBER = os.getenv('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+14155238886')
 
         # Server Configuration
         self.WEBHOOK_PORT = int(os.getenv('WEBHOOK_PORT', 5000))
@@ -45,12 +53,15 @@ class Config:
         self._validate_config()
 
     def _validate_config(self):
-        """Validate that required configuration is present."""
-        required_vars = [
-            'WHATSAPP_VERIFY_TOKEN',
-            'WHATSAPP_ACCESS_TOKEN',
-            'WHATSAPP_PHONE_NUMBER_ID'
-        ]
+        """Validate that required configuration is present for the active provider."""
+        if self.MESSAGING_PROVIDER == 'twilio':
+            required_vars = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN']
+        else:
+            required_vars = [
+                'WHATSAPP_VERIFY_TOKEN',
+                'WHATSAPP_ACCESS_TOKEN',
+                'WHATSAPP_PHONE_NUMBER_ID'
+            ]
 
         missing_vars = []
         for var in required_vars:
@@ -59,19 +70,21 @@ class Config:
                 missing_vars.append(var)
 
         if missing_vars:
-            print(f"\n⚠️  WARNING: Missing or invalid configuration:")
+            print(f"\n⚠️  WARNING: Missing or invalid configuration for provider '{self.MESSAGING_PROVIDER}':")
             for var in missing_vars:
                 print(f"   - {var}")
-            print(f"\nPlease update your .env file with valid WhatsApp credentials.")
+            print(f"\nPlease update your .env file with valid credentials.")
             print(f"See .env.example for required variables.\n")
 
     def is_configured(self):
         """
-        Check if all required configuration is present.
+        Check if all required configuration is present for the active provider.
 
         Returns:
             bool: True if configured, False otherwise
         """
+        if self.MESSAGING_PROVIDER == 'twilio':
+            return bool(self.TWILIO_ACCOUNT_SID and self.TWILIO_AUTH_TOKEN)
         return all([
             self.WHATSAPP_VERIFY_TOKEN,
             self.WHATSAPP_ACCESS_TOKEN,

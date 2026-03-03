@@ -7,6 +7,9 @@ Flask==3.0.0
 pyngrok==7.0.1
 gunicorn==21.2.0
 
+# Messaging provider — Twilio WhatsApp Sandbox adapter
+twilio==9.10.2
+
 # Database dependencies
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.23
