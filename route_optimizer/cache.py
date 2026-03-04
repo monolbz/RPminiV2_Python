@@ -78,6 +78,7 @@ def save_to_cache(cache_key, data):
         cache_key: The cache key to save under
         data: The data to cache
     """
+    CACHE_DIR.mkdir(exist_ok=True)
     cache_file = CACHE_DIR / f"{cache_key}.json"
 
     cache_entry = {
