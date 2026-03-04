@@ -288,7 +288,7 @@ class ConsentManager:
                 # Audit trail logged by user_id (phone_number is being overwritten)
                 audit = AuditLog.log_action(
                     user_id=user.user_id,
-                    action='user_anonymized',
+                    action='data_deleted',
                     actor='user',
                     details={'gdpr_article': 'Art17', 'fields_cleared': ['phone_number', 'display_name']}
                 )
