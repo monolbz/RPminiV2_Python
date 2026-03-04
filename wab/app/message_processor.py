@@ -546,6 +546,12 @@ class MessageProcessor:
         Returns:
             str: 'accept', 'decline', or None
         """
+        # Consent responses are always short (e.g. "sí", "acepto", "no").
+        # A list of addresses or any other content will never qualify.
+        # This prevents substring false-positives (e.g. 'si' inside 'residencia').
+        if len(message_text.strip()) > 50:
+            return None
+
         keywords = get_consent_keywords()
         message_lower = message_text.lower().strip()
 
