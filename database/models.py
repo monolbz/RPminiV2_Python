@@ -19,8 +19,8 @@ GDPR Compliance:
 
 from datetime import datetime, timedelta
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, ForeignKey,
-    CheckConstraint, Index, func, Text
+    Column, String, Boolean, DateTime, Date, ForeignKey,
+    CheckConstraint, Index, Integer, func, Text
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, relationship
@@ -71,6 +71,14 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime(timezone=True))  # Soft delete
+
+    # Tier / usage tracking
+    tier = Column(String(20), nullable=False, default='btester')
+    tier_started_at = Column(DateTime(timezone=True), default=func.now())
+    tier_expires_at = Column(DateTime(timezone=True))
+    routes_used_lifetime = Column(Integer, nullable=False, default=0)
+    routes_used_today = Column(Integer, nullable=False, default=0)
+    routes_reset_date = Column(Date)  # UTC date of last daily counter reset
 
     # Relationships
     consents = relationship("Consent", back_populates="user", cascade="all")
