@@ -46,6 +46,10 @@ class Config:
         self.WHATSAPP_DEFAULT_TEMPLATE = os.getenv('WHATSAPP_DEFAULT_TEMPLATE', 'hello_world')
         self.WHATSAPP_TEMPLATES_CONFIG = os.getenv('WHATSAPP_TEMPLATES_CONFIG', 'wab/config/templates.json')
 
+        # Tier / Usage limits
+        self.BTESTER_MAX_USERS = int(os.getenv('BTESTER_MAX_USERS', '20'))
+        self.FREE_TIER_MAX_USERS = int(os.getenv('FREE_TIER_MAX_USERS', '150'))
+
         # Logging Configuration
         self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 

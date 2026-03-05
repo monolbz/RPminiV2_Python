@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from database.db_manager import get_db_manager
 from database.models import User, Consent, AuditLog
 from ..utils.logger import setup_logger
+from . import usage_manager
 
 logger = setup_logger(__name__)
 
@@ -160,6 +161,9 @@ class ConsentManager:
                         ip_address=ip_address
                     )
                     session.add(audit)
+
+                    # Assign default tier (btester or free) within same transaction
+                    usage_manager.assign_default_tier(user, session)
 
                     logger.info(f"Created new user: {phone_number}")
 

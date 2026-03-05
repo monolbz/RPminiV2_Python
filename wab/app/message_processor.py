@@ -11,6 +11,7 @@ from ..utils.logger import setup_logger
 from ..utils.conversation_tracker_db import ConversationTracker
 from .address_parser import AddressParser
 from .consent_manager_db import ConsentManager
+from . import usage_manager
 from ..integration.route_optimizer_bridge import route_bridge
 from ..templates import (
     CONSENT_REQUEST,
@@ -256,6 +257,11 @@ class MessageProcessor:
         try:
             logger.info(f"Processing route request from {display_name}")
 
+            # Check tier/usage gate before hitting Google Maps API
+            allowed, block_message = usage_manager.check_route_allowed(from_number)
+            if not allowed:
+                return self._create_response(from_number, phone_number_id, block_message)
+
             # Parse addresses from message
             addresses, error = address_parser.parse_addresses(message_body)
 
@@ -274,6 +280,9 @@ class MessageProcessor:
 
             # Optimize the route
             result = route_bridge.optimize_route(addresses)
+
+            # Route succeeded — record usage (only on success, never on error)
+            usage_manager.record_route_used(from_number)
 
             # Twilio: split into two messages to stay within the 1600-char outgoing limit.
             # Summary (addresses + savings) first, Google Maps URL second.
