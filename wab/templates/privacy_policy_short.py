@@ -15,8 +15,8 @@ PRIVACY_POLICY_SHORT = """📋 *POLÍTICA DE PRIVACIDAD*
 _Versión 1.0 - 28 de octubre de 2025_
 
 *Responsable del Tratamiento:*
-[TU_NOMBRE_O_EMPRESA]
-Email: [TU_EMAIL]
+Jorge Blanco / Monowai.es
+Email: privacy@monowai.es
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -77,11 +77,10 @@ Email: [TU_EMAIL]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 *📞 CONTACTO:*
-Email: [TU_EMAIL]
-Tel: [TU_TELÉFONO]
+Email: privacy@monowai.es
 
 *📄 Política completa:*
-[URL_DE_TU_WEB]/privacy
+https://mirutapro.monowai.es/política-de-privacidad
 
 o solicítala por email
 
@@ -114,7 +113,7 @@ Comandos:
 • `/revokeconsent` - Retirar consentimiento
 • `/privacy` - Política completa
 
-Más info: [TU_EMAIL]"""
+Más info: privacy@monowai.es"""
 
 
 # =============================================================================
@@ -147,7 +146,7 @@ PRIVACY_KEY_POINTS = """📋 *Puntos Clave de Privacidad*
    • Eliminación automática
    • Cumplimiento RGPD
 
-*¿Dudas?* Escribe /privacy o contacta: [TU_EMAIL]"""
+*¿Dudas?* Escribe /privacy o contacta: privacy@monowai.es"""
 
 
 # =============================================================================

@@ -50,7 +50,7 @@ class AddressParser:
         """
         try:
             if not message_text or not message_text.strip():
-                return None, "Message is empty. Please send me addresses."
+                return None, "Mensaje vacío. Por favor, envíame las direcciones."
 
             # Clean the message
             text = message_text.strip()
@@ -148,7 +148,7 @@ class AddressParser:
                     logger.info(f"Removed duplicate waypoint: {addr}")
 
             if len(final_addresses) < self.min_addresses:
-                return None, f"After removing duplicates, only {len(final_addresses)} unique addresses found. Need at least {self.min_addresses}."
+                return None, f"Tras eliminar duplicados, solo quedan {len(final_addresses)} direcciones únicas. Necesitas al menos {self.min_addresses}."
 
             # Log success with duplicate info
             if is_round_trip:
@@ -162,7 +162,7 @@ class AddressParser:
 
         except Exception as e:
             logger.error(f"Error parsing addresses: {e}", exc_info=True)
-            return None, "Error processing addresses. Please try again."
+            return None, "Error al procesar las direcciones. Por favor, inténtalo de nuevo."
 
     def _parse_line_separated(self, text):
         """Parse addresses separated by newlines."""

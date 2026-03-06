@@ -261,7 +261,7 @@ class RouteOptimizerBridge:
         """
         # Clean up technical error messages
         if "GOOGLE_MAPS_API_KEY not found" in error_msg:
-            return "Error de configuración del servicio. Por favor, contacta al soporte."
+            return "Error de configuración del servicio. Por favor, contacta con soporte en support@monowai.es"
 
         if "Google Maps API error" in error_msg:
             if "ZERO_RESULTS" in error_msg:

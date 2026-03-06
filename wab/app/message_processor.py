@@ -69,7 +69,7 @@ class MessageProcessor:
                 return self._create_response(
                     from_number,
                     phone_number_id,
-                    f"Sorry, I don't support {message_type} messages yet. Please send a text message."
+                    "Lo siento, solo proceso mensajes de texto. Por favor, envíame tus direcciones en texto."
                 )
 
             # Process based on message type
@@ -520,7 +520,7 @@ class MessageProcessor:
                 )
                 logger.info(f"GDPR Art. 17 erasure completed for {from_number}")
             else:
-                reply_text = "❌ Error al procesar tu solicitud. Por favor, intenta de nuevo o contacta soporte."
+                reply_text = "❌ Error al procesar tu solicitud. Por favor, intenta de nuevo o contacta con soporte en support@monowai.es"
 
         return self._create_response(from_number, phone_number_id, reply_text)
 
@@ -635,7 +635,7 @@ class MessageProcessor:
             return self._create_response(
                 from_number,
                 phone_number_id,
-                "❌ Error al procesar tu consentimiento. Por favor, contacta soporte."
+                "❌ Error al procesar tu consentimiento. Por favor, contacta con soporte en support@monowai.es"
             )
 
     def _create_response(self, to_number, phone_number_id, message_text):

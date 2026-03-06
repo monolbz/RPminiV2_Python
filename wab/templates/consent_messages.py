@@ -84,7 +84,7 @@ Entendemos tu decisión. Sin tu consentimiento, no podemos procesar tus direccio
 Escribe *"Acepto"* en cualquier momento para dar tu consentimiento.
 
 📧 *¿Tienes preguntas?*
-Contacta con nosotros en: [TU_EMAIL_DE_CONTACTO]
+Contacta con nosotros en: privacy@monowai.es
 
 Gracias por tu tiempo. 🙏"""
 
@@ -218,11 +218,10 @@ def get_consent_keywords():
 DATA_CONTROLLER_INFO = """
 📋 *Responsable del Tratamiento de Datos*
 
-*Identidad:* [TU_NOMBRE_O_EMPRESA]
-*NIF/CIF:* [TU_NIF_O_CIF]
-*Dirección:* [TU_DIRECCIÓN]
-*Email:* [TU_EMAIL]
-*Teléfono:* [TU_TELÉFONO]
+*Identidad:* Jorge Blanco / Monowai.es
+*NIF/CIF:* 02571328C
+*Dirección:* Paseo de Santa María de la Cabeza, 21, 28045 Madrid, España
+*Email:* privacy@monowai.es
 
 *Autoridad de Control:*
 Agencia Española de Protección de Datos (AEPD)
