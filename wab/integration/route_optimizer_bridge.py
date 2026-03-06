@@ -265,14 +265,14 @@ class RouteOptimizerBridge:
 
         if "Google Maps API error" in error_msg:
             if "ZERO_RESULTS" in error_msg:
-                return "No se pudo encontrar una ruta entre estas direcciones. Por favor, verifica que todas las direcciones sean válidas y accesibles. Para más detalles, escribe /ayuda o /elemplo."
+                return "No se pudo encontrar una ruta entre estas direcciones. Por favor, verifica que todas las direcciones sean válidas y accesibles. Para más detalles, escribe /ayuda o /ejemplo."
 
             if "NOT_FOUND" in error_msg or "INVALID" in error_msg:
                 # Extract which addresses failed if available
                 if "Invalid or not found addresses:" in error_msg:
-                    return error_msg  # Already formatted nicely
+                    return error_msg + " Para más detalles, escribe /ayuda o /ejemplo."
                 else:
-                    return "No se pudo encontrar una o más direcciones. Por favor, verifica tus direcciones y vuelve a intentarlo."
+                    return "No se pudo encontrar una o más direcciones. Por favor, verifica tus direcciones y vuelve a intentarlo. Para más detalles, escribe /ayuda o /ejemplo."
 
             if "REQUEST_DENIED" in error_msg:
                 return "Error del servicio: No se puede acceder al servicio de mapas. Por favor, intenta nuevamente más tarde."
