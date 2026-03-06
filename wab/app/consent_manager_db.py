@@ -167,6 +167,10 @@ class ConsentManager:
 
                     logger.info(f"Created new user: {phone_number}")
 
+                elif user.tier_expires_at is None:
+                    # User exists but tier not yet assigned (created by conversation_tracker)
+                    usage_manager.assign_default_tier(user, session)
+
                 # Create consent record
                 consent = Consent(
                     user_id=user.user_id,

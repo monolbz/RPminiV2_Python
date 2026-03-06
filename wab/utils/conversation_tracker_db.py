@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from database.db_manager import get_db_manager
 from database.models import User, Session, AuditLog
 from ..utils.logger import setup_logger
+from ..app import usage_manager
 
 logger = setup_logger(__name__)
 
@@ -80,6 +81,9 @@ class ConversationTracker:
                     user = User(phone_number=phone_number)
                     session_db.add(user)
                     session_db.flush()
+
+                    # Assign default tier at creation time
+                    usage_manager.assign_default_tier(user, session_db)
 
                     logger.info(f"Created new user: {phone_number}")
 
