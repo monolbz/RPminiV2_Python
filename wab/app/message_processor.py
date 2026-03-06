@@ -281,8 +281,9 @@ class MessageProcessor:
             # Optimize the route
             result = route_bridge.optimize_route(addresses)
 
-            # Route succeeded — record usage (only on success, never on error)
-            usage_manager.record_route_used(from_number)
+            # Only record usage on successful optimization (never on error/bad addresses)
+            if result.get('success'):
+                usage_manager.record_route_used(from_number)
 
             # Twilio: split into two messages to stay within the 1600-char outgoing limit.
             # Summary (addresses + savings) first, Google Maps URL second.
