@@ -276,7 +276,7 @@ def _blocked_message(tier: str, reason: str) -> str:
     return (
         f"{opening}\n\n"
         "💳 Los pagos estarán disponibles muy pronto.\n"
-        "¡Gracias por tu paciencia! 🙏"
+        "¡Gracias por tu paciencia!"
     )
 
 

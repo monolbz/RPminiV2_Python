@@ -86,7 +86,7 @@ Escribe *"Acepto"* en cualquier momento para dar tu consentimiento.
 📧 *¿Tienes preguntas?*
 Contacta con nosotros en: privacy@monowai.es
 
-Gracias por tu tiempo. 🙏"""
+Gracias por tu tiempo."""
 
 
 # =============================================================================
@@ -112,7 +112,7 @@ Has retirado tu consentimiento exitosamente.
 💭 *¿Has cambiado de opinión?*
 Puedes dar tu consentimiento de nuevo escribiendo *"Acepto"*
 
-Gracias por haber usado nuestro servicio. 🙏"""
+Gracias por haber usado nuestro servicio."""
 
 
 # =============================================================================

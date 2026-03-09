@@ -12,6 +12,7 @@ from ..utils.conversation_tracker_db import ConversationTracker
 from .address_parser import AddressParser
 from .consent_manager_db import ConsentManager
 from . import usage_manager
+from ..config.config import Config
 from ..integration.route_optimizer_bridge import route_bridge
 from ..templates import (
     CONSENT_REQUEST,
@@ -25,6 +26,7 @@ from ..templates import (
 )
 
 logger = setup_logger(__name__)
+config = Config()
 conversation_tracker = ConversationTracker()
 address_parser = AddressParser()
 consent_manager = ConsentManager()
@@ -380,7 +382,7 @@ class MessageProcessor:
     def _handle_about_command(self, from_number, phone_number_id, display_name):
         """Handle /about command."""
         reply_text = (
-            "ℹ️ *Acerca de Minubo AI*\n\n"
+            "ℹ️ *Acerca de Mi Ruta Pro*\n\n"
             "*¿Qué es esta herramienta?*\n"
             "Un asistente inteligente que optimiza rutas de entrega potenciado por IA.\n\n"
             "*Características clave:*\n"
@@ -402,7 +404,9 @@ class MessageProcessor:
     def _handle_privacy_command(self, from_number, phone_number_id, display_name):
         """Handle /privacy command - show privacy policy."""
         logger.info(f"User {from_number} requested privacy policy")
-        reply_text = get_privacy_message(version="short")
+        # Twilio has a 1600-char limit; Meta allows up to 4096
+        version = "summary" if config.MESSAGING_PROVIDER == 'twilio' else "short"
+        reply_text = get_privacy_message(version=version)
         return self._create_response(from_number, phone_number_id, reply_text)
 
     def _handle_mydata_command(self, from_number, phone_number_id, display_name):
@@ -516,7 +520,7 @@ class MessageProcessor:
                     "*⚠️ Nota importante:*\n"
                     "El registro de tu consentimiento se conservará 3 años por obligación legal "
                     "(para demostrar que tuviste nuestro consentimiento), pero sin tus datos personales.\n\n"
-                    "Gracias por haber usado nuestro servicio. 🙏"
+                    "Gracias por haber usado nuestro servicio."
                 )
                 logger.info(f"GDPR Art. 17 erasure completed for {from_number}")
             else:
