@@ -239,9 +239,21 @@ class RouteOptimizerBridge:
                 if distance_saved == 0:
                     message += f"\n💚 *Tu ruta original ya es la más óptima*\n"
 
-            # Google Maps URL as second part
+            # Google Maps URL as second part.
+            # Guard: the formatted maps_message must also stay under Twilio's 1600-char
+            # limit. With many long addresses the URL alone can exceed it.
+            # Strategy: try full formatting → bare URL → fallback note.
             google_maps_url = generate_google_maps_url(optimized)
-            maps_message = f"📍 *Ver en Google Maps:*\n{google_maps_url}" if google_maps_url else None
+            if google_maps_url:
+                full_maps_message = f"📍 *Ver en Google Maps:*\n{google_maps_url}"
+                if len(full_maps_message) <= 1550:
+                    maps_message = full_maps_message
+                elif len(google_maps_url) <= 1550:
+                    maps_message = google_maps_url  # bare URL, no prefix
+                else:
+                    maps_message = "📍 El enlace de Google Maps es demasiado largo para enviarlo por WhatsApp. Abre Google Maps y pega las direcciones manualmente."
+            else:
+                maps_message = None
 
             return message, maps_message
 
