@@ -220,6 +220,25 @@ class RouteOptimizerBridge:
             if distance_saved == 0:
                 message += f"\n💚 *Tu ruta original ya es la más óptima*\n"
 
+            # Guard: Twilio rejects messages over 1600 chars. If the summary is too
+            # long (e.g. many addresses with long street names), rebuild it with each
+            # address truncated to 40 chars so the total always stays under the limit.
+            if len(message) > 1550:
+                message = "✅ *Ruta calculada!*\n\n"
+                if used_fallback:
+                    message += "⚠️ *La optimización no mejoró tu ruta original. Verifica tus direcciones.* \n\n"
+                message += "🗺️ *Nueva ruta:*\n"
+                for i, addr in enumerate(optimized['addresses'], 1):
+                    short_addr = addr[:40] + "…" if len(addr) > 40 else addr
+                    message += f"{i}. {short_addr}\n"
+                if distance_saved > 0:
+                    message += f"\n💚 *Ahorros vs Ruta original:*\n"
+                    message += f"  • Distancia: {distance_saved:.2f} km ({savings_percent:.1f}%)\n"
+                    message += f"  • Tiempo: {format_duration(abs(time_saved))}\n"
+                    message += f"  • Coste de combustible: €{fuel_savings:.2f}\n"
+                if distance_saved == 0:
+                    message += f"\n💚 *Tu ruta original ya es la más óptima*\n"
+
             # Google Maps URL as second part
             google_maps_url = generate_google_maps_url(optimized)
             maps_message = f"📍 *Ver en Google Maps:*\n{google_maps_url}" if google_maps_url else None
