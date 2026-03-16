@@ -131,6 +131,10 @@ def check_route_allowed(phone_number: str) -> Tuple[bool, str]:
         (True, '') if allowed
         (False, message) if blocked
     """
+    if _is_superuser(phone_number):
+        logger.info(f"Superuser bypass: {phone_number}")
+        return True, ''
+
     try:
         db = get_db_manager()
         with db.get_session() as session:
@@ -189,6 +193,10 @@ def record_route_used(phone_number: str) -> None:
     Args:
         phone_number: User's phone number (E.164 format)
     """
+    if _is_superuser(phone_number):
+        logger.info(f"Superuser bypass: skipping counter increment for {phone_number}")
+        return
+
     try:
         db = get_db_manager()
         with db.get_session() as session:
@@ -283,3 +291,9 @@ def _blocked_message(tier: str, reason: str) -> str:
 def _error_message() -> str:
     """Generic error message when usage check fails unexpectedly."""
     return "❌ No se pudo verificar tu acceso. Por favor, intenta de nuevo."
+
+
+def _is_superuser(phone_number: str) -> bool:
+    """Return True if phone_number is listed in SUPERUSER_PHONES env var."""
+    from ..config.config import Config
+    return phone_number in Config().SUPERUSER_PHONES

@@ -50,6 +50,10 @@ class Config:
         self.BTESTER_MAX_USERS = int(os.getenv('BTESTER_MAX_USERS', '20'))
         self.FREE_TIER_MAX_USERS = int(os.getenv('FREE_TIER_MAX_USERS', '150'))
 
+        # Superuser phones — comma-separated E.164 numbers that bypass all limits
+        raw = os.getenv('SUPERUSER_PHONES', '')
+        self.SUPERUSER_PHONES = {p.strip() for p in raw.split(',') if p.strip()}
+
         # Logging Configuration
         self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
