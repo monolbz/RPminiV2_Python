@@ -12,6 +12,7 @@ from ..utils.conversation_tracker_db import ConversationTracker
 from .address_parser import AddressParser
 from .consent_manager_db import ConsentManager
 from . import usage_manager
+from .feedback_manager import feedback_manager
 from ..config.config import Config
 from ..integration.route_optimizer_bridge import route_bridge
 from ..templates import (
@@ -116,6 +117,23 @@ class MessageProcessor:
 
             # Check for command shortcuts (must be exact match)
             message_lower = message_body.lower().strip()
+
+            # FEEDBACK SURVEY INTERCEPT
+            # GDPR commands always bypass the survey so users can revoke/delete
+            # at any time, even mid-survey.
+            _gdpr_commands = {
+                '/privacy', 'privacy', '/privacidad', 'privacidad',
+                '/mydata', 'mydata', '/misdatos', 'misdatos',
+                '/exportdata', 'exportdata', '/exportar', 'exportar',
+                '/deletedata', 'deletedata', '/borrar', 'borrar', '/eliminar', 'eliminar',
+                '/revokeconsent', 'revokeconsent', '/revocar', 'revocar',
+            }
+            if message_lower not in _gdpr_commands:
+                survey_reply = feedback_manager.handle_incoming(
+                    from_number, message_body, phone_number_id
+                )
+                if survey_reply is not None:
+                    return self._create_response(from_number, phone_number_id, survey_reply)
 
             # Command: /help or /ayuda
             if message_lower in ['/help', '/ayuda', 'help', 'ayuda']:

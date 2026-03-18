@@ -20,7 +20,7 @@ GDPR Compliance:
 from datetime import datetime, timedelta
 from sqlalchemy import (
     Column, String, Boolean, DateTime, Date, ForeignKey,
-    CheckConstraint, Index, Integer, func, Text
+    CheckConstraint, Index, Integer, SmallInteger, func, Text
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import declarative_base, relationship
@@ -335,5 +335,65 @@ class AuditLog(Base):
         return self.created_at + timedelta(days=90)
 
 
+class FeedbackSurvey(Base):
+    """
+    NPS feedback survey sent to users on day 3 of use.
+
+    Lifecycle:
+    - Created by cron job when user qualifies (3+ days old, >= 1 route used)
+    - status='pending'  → Q1 not yet delivered (Meta outside 24h window)
+    - status='sent'     → Q1 delivered, waiting for answer
+    - status='in_progress' → user has answered at least one question
+    - status='completed' → all 3 questions answered (or skipped individually)
+    - status='skipped'  → user typed 'saltar' to exit early
+
+    The partial unique index on phone_number WHERE status NOT IN ('completed','skipped')
+    prevents duplicate active surveys while allowing re-survey in the future.
+    """
+    __tablename__ = 'feedback_surveys'
+
+    survey_id       = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    phone_number    = Column(String(20), ForeignKey('users.phone_number', ondelete='CASCADE'), nullable=False)
+    status          = Column(String(20), nullable=False, default='pending')
+    current_step    = Column(String(20), nullable=False, default='q1')
+    nps_score       = Column(SmallInteger)
+    free_text       = Column(Text)
+    willing_to_pay  = Column(String(10))
+    price_suggestion = Column(String(100))
+    created_at      = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    sent_at         = Column(DateTime(timezone=True))
+    completed_at    = Column(DateTime(timezone=True))
+    skipped_at      = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','sent','in_progress','completed','skipped')",
+            name='feedback_survey_status'
+        ),
+        CheckConstraint(
+            "current_step IN ('q1','q2','q3','done')",
+            name='feedback_survey_step'
+        ),
+        CheckConstraint(
+            "nps_score BETWEEN 1 AND 10",
+            name='feedback_survey_nps_range'
+        ),
+        CheckConstraint(
+            "willing_to_pay IN ('si','no','quizas')",
+            name='feedback_survey_willing'
+        ),
+        Index('idx_feedback_surveys_phone', 'phone_number'),
+        Index('idx_feedback_surveys_status', 'status'),
+        Index('idx_feedback_surveys_created', 'created_at'),
+    )
+
+    def __repr__(self):
+        return (
+            f"<FeedbackSurvey(survey_id='{self.survey_id}', "
+            f"phone='{self.phone_number}', status='{self.status}', "
+            f"step='{self.current_step}')>"
+        )
+
+
 # Export all models for easy import
-__all__ = ['Base', 'User', 'Consent', 'Session', 'AuditLog', 'SchemaMigration']
+__all__ = ['Base', 'User', 'Consent', 'Session', 'AuditLog', 'SchemaMigration', 'FeedbackSurvey']
