@@ -54,6 +54,9 @@ class Config:
         raw = os.getenv('SUPERUSER_PHONES', '')
         self.SUPERUSER_PHONES = {p.strip() for p in raw.split(',') if p.strip()}
 
+        # Internal cron endpoint auth token
+        self.INTERNAL_API_SECRET = os.getenv('INTERNAL_API_SECRET', '')
+
         # Logging Configuration
         self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 

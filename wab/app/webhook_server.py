@@ -7,6 +7,7 @@ Main Flask application for receiving and handling WhatsApp webhook events.
 import os
 import threading
 import time
+from functools import wraps
 from flask import Flask, request, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 from ..utils.logger import setup_logger
@@ -15,6 +16,7 @@ from ..config.config import Config
 from ..providers import get_provider
 from .message_processor import MessageProcessor
 from .message_sender import MessageSender
+from .feedback_manager import feedback_manager
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -232,6 +234,63 @@ def index():
             'webhook_receive': 'POST /webhook',
             'health': 'GET /health'
         }
+    }), 200
+
+
+def _require_internal_token(f):
+    """Decorator: require Authorization: Bearer <INTERNAL_API_SECRET> header."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        secret = config.INTERNAL_API_SECRET
+        if not secret:
+            logger.error("INTERNAL_API_SECRET not configured — rejecting internal request")
+            return jsonify({'status': 'error', 'message': 'Internal auth not configured'}), 500
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'status': 'error', 'message': 'Missing Authorization header'}), 401
+        token = auth_header[len('Bearer '):]
+        if token != secret:
+            logger.warning("Internal cron request with wrong token")
+            return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route('/internal/cron/send-feedback', methods=['POST'])
+@_require_internal_token
+def cron_send_feedback():
+    """
+    Internal cron endpoint — triggered daily at 08:00 UTC by cron-job.org.
+    Finds eligible users and sends (or queues) the NPS survey Q1.
+    """
+    logger.info("Cron: send-feedback triggered")
+    eligible = feedback_manager.find_eligible_users()
+    sent = 0
+    pending = 0
+    errors = 0
+
+    for phone in eligible:
+        try:
+            created = feedback_manager.create_pending_survey(phone)
+            if not created:
+                errors += 1
+                continue
+            delivered = feedback_manager.send_q1(phone, message_sender)
+            if delivered:
+                sent += 1
+            else:
+                pending += 1
+        except Exception as e:
+            logger.error(f"Cron: error processing {phone}: {e}", exc_info=True)
+            errors += 1
+
+    logger.info(f"Cron send-feedback: eligible={len(eligible)}, sent={sent}, pending={pending}, errors={errors}")
+    return jsonify({
+        'status': 'ok',
+        'eligible': len(eligible),
+        'sent': sent,
+        'pending': pending,
+        'errors': errors,
     }), 200
 
 
