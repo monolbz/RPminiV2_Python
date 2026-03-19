@@ -34,20 +34,20 @@ logger = setup_logger(__name__)
 MSG_Q1 = (
     "¡Hola! Llevas unos días usando *Mi Ruta Pro* y nos encantaría saber tu opinión.\n"
     "Son solo 3 preguntas rápidas.\n\n"
-    "*Pregunta 1 de 3:* Del 1 al 10, ¿qué nota le darías a Mi Ruta Pro?\n\n"
+    "*Pregunta 1:* Del 1 al 10, ¿qué nota le darías a Mi Ruta Pro?\n\n"
     "_Responde con un número del 1 al 10, o escribe *saltar* para omitir la encuesta._"
 )
 
 MSG_Q2 = (
     "¡Gracias por tu nota!\n\n"
-    "*Pregunta 2 de 3:* ¿Qué es lo que más te ha ayudado, o qué cambiarías?\n\n"
+    "*Pregunta 2:* ¿Qué es lo que más te ha gustado, o qué cambiarías?\n\n"
     "_Escribe lo que quieras (o *saltar* para omitir)._"
 )
 
 MSG_Q3 = (
-    "*Pregunta 3 de 3:* ¿Estarías dispuesto a pagar por Mi Ruta Pro?\n"
-    "Si es que sí, ¿cuánto pagarías? Puedes indicar precio mensual o por uso.\n\n"
-    "Ejemplos: _si 5€/mes_, _si 0.50€ por ruta_, _no_, _quizas_\n\n"
+    "*Pregunta 3:* ¿Cuánto pagarías por Mi Ruta Pro? "
+    "Puedes indicar precio por uso o mensual.\n\n"
+    "Ejemplos: _3€ por ruta_, _50€ por mes_, _no_, _quizas_\n\n"
     "_O escribe *saltar* para terminar aquí._"
 )
 
