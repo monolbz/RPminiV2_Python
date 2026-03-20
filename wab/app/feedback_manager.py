@@ -96,10 +96,9 @@ class FeedbackManager:
             with self.db.get_session() as session:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=3)
 
-                # Users with an existing active survey
+                # Users who have ever had a survey (any status) — one survey per user, ever
                 active_survey_phones = (
                     session.query(FeedbackSurvey.phone_number)
-                    .filter(FeedbackSurvey.status.notin_(['completed', 'skipped']))
                     .subquery()
                 )
 
