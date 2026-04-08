@@ -127,6 +127,8 @@ class MessageProcessor:
                 '/exportdata', 'exportdata', '/exportar', 'exportar',
                 '/deletedata', 'deletedata', '/borrar', 'borrar', '/eliminar', 'eliminar',
                 '/revokeconsent', 'revokeconsent', '/revocar', 'revocar',
+                '/pagos', 'pagos', '/pago', 'pago',
+                'cancelar suscripción', 'cancelar suscripcion',
             }
             if message_lower not in _gdpr_commands:
                 survey_reply = feedback_manager.handle_incoming(
@@ -146,6 +148,15 @@ class MessageProcessor:
             # Command: /about or /info
             if message_lower in ['/about', '/info', 'about', 'info']:
                 return self._handle_about_command(from_number, phone_number_id, display_name)
+
+            # Command: /pagos (show plan + payment options)
+            if message_lower in ['/pagos', 'pagos', '/pago', 'pago']:
+                return self._handle_pagos_command(from_number, phone_number_id, display_name)
+
+            # Command: cancelar suscripción
+            if message_lower in ['cancelar suscripción', 'cancelar suscripcion',
+                                  '/cancelar suscripción', '/cancelar suscripcion']:
+                return self._handle_cancel_subscription_command(from_number, phone_number_id, display_name)
 
             # GDPR COMMANDS
             # Command: /privacy (show privacy policy)
@@ -418,6 +429,128 @@ class MessageProcessor:
             "Versión: 3.0.0"
         )
         return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _handle_pagos_command(self, from_number, phone_number_id, display_name):
+        """Handle /pagos command — show current plan + payment options."""
+        if not consent_manager.has_consent(from_number):
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        from database.db_manager import get_db_manager
+        from database.models import User
+        from .stripe_manager import StripeManager, TIER_DISPLAY
+
+        db = get_db_manager()
+        try:
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=from_number, deleted_at=None
+                ).first()
+
+                if not user:
+                    return self._create_response(from_number, phone_number_id,
+                                                 "❌ No encontré tu cuenta. Intenta de nuevo.")
+
+                tier = user.tier
+                tier_expires_at = user.tier_expires_at
+                routes_today = user.routes_used_today or 0
+                routes_lifetime = user.routes_used_lifetime or 0
+
+        except Exception as e:
+            logger.error(f"_handle_pagos_command DB error for {from_number}: {e}", exc_info=True)
+            return self._create_response(from_number, phone_number_id,
+                                         "❌ No pude acceder a tu cuenta. Intenta de nuevo.")
+
+        # Build current plan section (only for paid tiers)
+        TIER_LIMITS = {'btester': '3/día', 'free': '3 totales', 'ppu': 'pago por uso',
+                       'premium': '2/día', 'plus': '4/día'}
+        paid_tiers = {'ppu', 'premium', 'plus'}
+        plan_section = ""
+        if tier in paid_tiers:
+            display_name_tier, price, _ = TIER_DISPLAY.get(tier, (tier, '', ''))
+            if tier_expires_at:
+                valid_until = tier_expires_at.strftime("%d %b %Y")
+                validity_line = f"📅 *Válido hasta:* {valid_until}\n"
+            else:
+                validity_line = "📅 *Validez:* sin límite de tiempo\n"
+            plan_section = (
+                f"💳 *Mi Ruta Pro — Tu plan actual*\n\n"
+                f"📦 *Plan:* {display_name_tier}\n"
+                f"{validity_line}"
+                f"🗺️ *Rutas hoy:* {routes_today}\n"
+                f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
+                f"{'─' * 20}\n"
+                f"💡 *Cambiar plan:*\n\n"
+            )
+        else:
+            plan_section = (
+                f"💳 *Mi Ruta Pro — Planes disponibles*\n\n"
+                f"📦 *Plan actual:* {tier} ({TIER_LIMITS.get(tier, '')})\n"
+                f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
+                f"{'─' * 20}\n"
+                f"💡 *Elige un plan para continuar:*\n\n"
+            )
+
+        # Build upgrade options
+        try:
+            stripe_mgr = StripeManager()
+            upgrade_block = stripe_mgr.get_upgrade_options(from_number, ['ppu', 'premium', 'plus'])
+        except Exception:
+            upgrade_block = ""
+
+        if upgrade_block:
+            reply_text = (
+                f"{plan_section}"
+                f"{upgrade_block}\n\n"
+                f"_Los precios incluyen IVA. Pago seguro con Stripe 🔒_\n\n"
+                f"❓ Para cancelar tu suscripción, escribe *cancelar suscripción*."
+            )
+        else:
+            reply_text = (
+                f"{plan_section}"
+                "💳 Los pagos estarán disponibles muy pronto."
+            )
+
+        return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _handle_cancel_subscription_command(self, from_number, phone_number_id, display_name):
+        """Handle 'cancelar suscripción' — cancel Stripe subscription immediately."""
+        if not consent_manager.has_consent(from_number):
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        from database.db_manager import get_db_manager
+        from database.models import User
+        import stripe
+
+        db = get_db_manager()
+        try:
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=from_number, deleted_at=None
+                ).first()
+                if not user or not user.stripe_subscription_id:
+                    return self._create_response(
+                        from_number, phone_number_id,
+                        "ℹ️ No tienes una suscripción activa para cancelar.\n\n"
+                        "Escribe *pagos* para ver los planes disponibles."
+                    )
+                sub_id = user.stripe_subscription_id
+
+            stripe.api_key = config.STRIPE_SECRET_KEY
+            stripe.Subscription.cancel(sub_id)
+
+            return self._create_response(
+                from_number, phone_number_id,
+                "✅ *Suscripción cancelada.*\n\n"
+                "Has vuelto al plan gratuito. Puedes reactivar tu plan cuando quieras "
+                "escribiendo *pagos*."
+            )
+
+        except Exception as e:
+            logger.error(f"Cancel subscription error for {from_number}: {e}", exc_info=True)
+            return self._create_response(
+                from_number, phone_number_id,
+                "❌ No pude cancelar tu suscripción. Por favor, inténtalo de nuevo más tarde."
+            )
 
     def _handle_privacy_command(self, from_number, phone_number_id, display_name):
         """Handle /privacy command - show privacy policy."""

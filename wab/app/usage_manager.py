@@ -162,19 +162,19 @@ def check_route_allowed(phone_number: str) -> Tuple[bool, str]:
                     expires_at = expires_at.replace(tzinfo=timezone.utc)
                 if datetime.now(timezone.utc) > expires_at:
                     _log_blocked(session, user, 'expired')
-                    return False, _blocked_message(user.tier, reason='expired')
+                    return False, _blocked_message(user.tier, reason='expired', phone_number=phone_number)
 
             # 3. Check lifetime limit (free tier only)
             if cfg['lifetime_limit'] is not None:
                 if user.routes_used_lifetime >= cfg['lifetime_limit']:
                     _log_blocked(session, user, 'lifetime_exhausted')
-                    return False, _blocked_message(user.tier, reason='lifetime_exhausted')
+                    return False, _blocked_message(user.tier, reason='lifetime_exhausted', phone_number=phone_number)
 
             # 4. Check daily limit (btester, ppu, premium, plus)
             if cfg['daily_limit'] is not None:
                 if user.routes_used_today >= cfg['daily_limit']:
                     _log_blocked(session, user, 'daily_limit')
-                    return False, _blocked_message(user.tier, reason='daily_limit')
+                    return False, _blocked_message(user.tier, reason='daily_limit', phone_number=phone_number)
 
             return True, ''
 
@@ -197,6 +197,7 @@ def record_route_used(phone_number: str) -> None:
         logger.info(f"Superuser bypass: skipping counter increment for {phone_number}")
         return
 
+    user_tier = None
     try:
         db = get_db_manager()
         with db.get_session() as session:
@@ -219,6 +220,7 @@ def record_route_used(phone_number: str) -> None:
 
             user.routes_used_lifetime += 1
             user.routes_used_today += 1
+            user_tier = user.tier  # capture before session closes
 
             audit = AuditLog.log_action(
                 user_id=user.user_id,
@@ -239,6 +241,14 @@ def record_route_used(phone_number: str) -> None:
     except Exception as e:
         logger.error(f"Error in record_route_used for {phone_number}: {e}", exc_info=True)
 
+    # Report metered usage to Stripe for ppu users (non-fatal)
+    if user_tier == 'ppu':
+        try:
+            from .stripe_manager import StripeManager
+            StripeManager().report_ppu_usage(phone_number)
+        except Exception as e:
+            logger.error(f"PPU usage reporting failed for {phone_number}: {e}")
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -258,34 +268,57 @@ def _log_blocked(session, user: User, reason: str) -> None:
         pass  # Don't let audit failure block the gate response
 
 
-def _blocked_message(tier: str, reason: str) -> str:
+def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None) -> str:
     """
     Return the appropriate blocked message for the given tier and reason.
-
-    Pre-Stripe: all paths lead to "coming soon".
-    Phase 3 will replace these with real Stripe payment links.
+    Includes Stripe Checkout links when phone_number is provided.
+    Falls back gracefully if Stripe is not configured.
     """
     if reason == 'daily_limit':
+        # User hit their daily cap — offer upgrade to plus
         opening = (
-            "⏳ *Has alcanzado el límite diario de tu plan*\n\n"
-            "Mañana podrás volver a optimizar rutas."
+            f"⛔ *Has alcanzado el límite diario de tu plan* ({tier}).\n\n"
+            "Mañana el contador se reinicia automáticamente 🌅\n\n"
+            "Para más rutas hoy, actualiza a *Plus* (4 rutas/día):"
         )
+        if phone_number:
+            upgrade = _get_upgrade_block(phone_number, ['plus'])
+            if upgrade:
+                return f"{opening}\n\n{upgrade}\n\n_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
+        return f"{opening}\n\n💳 Los pagos estarán disponibles muy pronto."
+
     elif reason == 'lifetime_exhausted':
         opening = (
-            "📦 *Has usado todas las rutas de tu período de prueba*\n\n"
-            "Has aprovechado al máximo las rutas gratuitas incluidas."
+            "📦 *Has usado todas las rutas de tu período de prueba.*\n\n"
+            "Elige un plan para continuar optimizando:"
         )
     else:  # expired
         opening = (
-            "⌛ *Tu período de prueba ha finalizado*\n\n"
-            "Gracias por haber probado el servicio."
+            "⌛ *Tu período de acceso ha finalizado.*\n\n"
+            "Elige un plan para continuar:"
         )
+
+    # lifetime_exhausted and expired: show all 3 tiers
+    if phone_number:
+        upgrade = _get_upgrade_block(phone_number, ['ppu', 'premium', 'plus'])
+        if upgrade:
+            return f"{opening}\n\n{upgrade}\n\n_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
 
     return (
         f"{opening}\n\n"
         "💳 Los pagos estarán disponibles muy pronto.\n"
         "¡Gracias por tu paciencia!"
     )
+
+
+def _get_upgrade_block(phone_number: str, tiers: list) -> str:
+    """Build Stripe checkout links block. Returns '' on any failure."""
+    try:
+        from .stripe_manager import StripeManager
+        return StripeManager().get_upgrade_options(phone_number, tiers)
+    except Exception as e:
+        logger.error(f"Could not build upgrade block for {phone_number}: {e}")
+        return ''
 
 
 def _error_message() -> str:

@@ -57,6 +57,15 @@ class Config:
         # Internal cron endpoint auth token
         self.INTERNAL_API_SECRET = os.getenv('INTERNAL_API_SECRET', '')
 
+        # Stripe Configuration (app boots without these — StripeManager validates on use)
+        self.STRIPE_SECRET_KEY     = os.getenv('STRIPE_SECRET_KEY', '')
+        self.STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+        self.STRIPE_PRICE_PPU      = os.getenv('STRIPE_PRICE_PPU', '')
+        self.STRIPE_PRICE_PREMIUM  = os.getenv('STRIPE_PRICE_PREMIUM', '')
+        self.STRIPE_PRICE_PLUS     = os.getenv('STRIPE_PRICE_PLUS', '')
+        self.STRIPE_SUCCESS_URL    = os.getenv('STRIPE_SUCCESS_URL', '')
+        self.STRIPE_CANCEL_URL     = os.getenv('STRIPE_CANCEL_URL', '')
+
         # Logging Configuration
         self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
