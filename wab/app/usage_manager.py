@@ -313,16 +313,21 @@ def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None)
             "Elige un plan para continuar:"
         )
 
-    # lifetime_exhausted and expired: show all 3 tiers
+    # lifetime_exhausted and expired: show PPU only (URL length limit)
+    # User can send 'pagos' to see all plans
     if phone_number:
-        upgrade = _get_upgrade_block(phone_number, ['ppu', 'premium', 'plus'])
+        upgrade = _get_upgrade_block(phone_number, ['ppu'])
         if upgrade:
-            return f"{opening}\n\n{upgrade}\n\n_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
+            return (
+                f"{opening}\n\n"
+                f"{upgrade}\n\n"
+                "_O escribe *pagos* para ver todos los planes. "
+                "Precios con IVA. Pago seguro con Stripe 🔒_"
+            )
 
     return (
         f"{opening}\n\n"
-        "💳 Los pagos estarán disponibles muy pronto.\n"
-        "¡Gracias por tu paciencia!"
+        "Escribe *pagos* para ver los planes disponibles."
     )
 
 
