@@ -82,10 +82,11 @@ class User(Base):
 
     # Stripe payment fields
     stripe_customer_id = Column(String(30))       # cus_XXXX
-    stripe_subscription_id = Column(String(30))   # sub_XXXX
+    stripe_subscription_id = Column(String(30))   # sub_XXXX (premium/plus only)
     stripe_price_id = Column(String(30))          # price_XXXX of active plan
     pending_tier = Column(String(20))             # tier awaiting checkout completion
     checkout_created_at = Column(DateTime(timezone=True))  # when checkout session was issued
+    ppu_credits = Column(Integer, nullable=False, default=0)  # pre-paid route credits
 
     # Relationships
     consents = relationship("Consent", back_populates="user", cascade="all")
@@ -138,6 +139,7 @@ class User(Base):
         self.stripe_price_id = None
         self.pending_tier = None
         self.checkout_created_at = None
+        self.ppu_credits = 0
 
 
 class Consent(Base):

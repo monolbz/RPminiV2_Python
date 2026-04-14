@@ -454,18 +454,27 @@ class MessageProcessor:
                 tier_expires_at = user.tier_expires_at
                 routes_today = user.routes_used_today or 0
                 routes_lifetime = user.routes_used_lifetime or 0
+                ppu_credits = user.ppu_credits or 0
 
         except Exception as e:
             logger.error(f"_handle_pagos_command DB error for {from_number}: {e}", exc_info=True)
             return self._create_response(from_number, phone_number_id,
                                          "❌ No pude acceder a tu cuenta. Intenta de nuevo.")
 
-        # Build current plan section (only for paid tiers)
+        # Build current plan section
         TIER_LIMITS = {'btester': '3/día', 'free': '3 totales', 'ppu': 'pago por uso',
                        'premium': '2/día', 'plus': '4/día'}
-        paid_tiers = {'ppu', 'premium', 'plus'}
         plan_section = ""
-        if tier in paid_tiers:
+        if tier == 'ppu':
+            plan_section = (
+                f"💳 *Mi Ruta Pro — Tu plan*\n\n"
+                f"📦 *Plan:* Pago por uso\n"
+                f"🎫 *Créditos disponibles:* {ppu_credits}\n"
+                f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
+                f"{'─' * 20}\n"
+                f"💡 *Recargar créditos (1 ruta = €1,99):*\n\n"
+            )
+        elif tier in {'premium', 'plus'}:
             display_name_tier, price, _ = TIER_DISPLAY.get(tier, (tier, '', ''))
             if tier_expires_at:
                 valid_until = tier_expires_at.strftime("%d %b %Y")
@@ -490,10 +499,11 @@ class MessageProcessor:
                 f"💡 *Elige un plan para continuar:*\n\n"
             )
 
-        # Build upgrade options
+        # Build upgrade options — PPU users only see credit top-up
+        tiers_to_show = ['ppu'] if tier == 'ppu' else ['ppu', 'premium', 'plus']
         try:
             stripe_mgr = StripeManager()
-            upgrade_block = stripe_mgr.get_upgrade_options(from_number, ['ppu', 'premium', 'plus'])
+            upgrade_block = stripe_mgr.get_upgrade_options(from_number, tiers_to_show)
         except Exception as e:
             logger.error(f"_handle_pagos_command: Stripe unavailable for {from_number}: {e}", exc_info=True)
             upgrade_block = ""

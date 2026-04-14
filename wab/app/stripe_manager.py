@@ -121,19 +121,33 @@ class StripeManager:
             return None
 
         try:
-            session = stripe.checkout.Session.create(
-                customer=customer_id,
-                client_reference_id=phone_number,
-                line_items=[{'price': price_id, 'quantity': 1}],
-                mode='subscription',
-                locale='es',
-                automatic_tax={'enabled': True},
-                success_url=self.config.STRIPE_SUCCESS_URL,
-                cancel_url=self.config.STRIPE_CANCEL_URL,
-                subscription_data={
-                    'metadata': {'tier': tier, 'phone_number': phone_number}
-                },
-            )
+            if tier == 'ppu':
+                # One-time payment per route credit — no subscription
+                session = stripe.checkout.Session.create(
+                    customer=customer_id,
+                    client_reference_id=phone_number,
+                    line_items=[{'price': price_id, 'quantity': 1}],
+                    mode='payment',
+                    locale='es',
+                    success_url=self.config.STRIPE_SUCCESS_URL,
+                    cancel_url=self.config.STRIPE_CANCEL_URL,
+                )
+            else:
+                # Recurring subscription (premium / plus)
+                session = stripe.checkout.Session.create(
+                    customer=customer_id,
+                    client_reference_id=phone_number,
+                    line_items=[{'price': price_id, 'quantity': 1}],
+                    mode='subscription',
+                    locale='es',
+                    automatic_tax={'enabled': True},
+                    customer_update={'address': 'auto'},
+                    success_url=self.config.STRIPE_SUCCESS_URL,
+                    cancel_url=self.config.STRIPE_CANCEL_URL,
+                    subscription_data={
+                        'metadata': {'tier': tier, 'phone_number': phone_number}
+                    },
+                )
 
             # Record pending tier and checkout timestamp
             with self.db.get_session() as db_session:
@@ -177,51 +191,6 @@ class StripeManager:
             if msg:
                 parts.append(msg)
         return "\n\n".join(parts)
-
-    # ------------------------------------------------------------------
-    # PPU usage reporting
-    # ------------------------------------------------------------------
-
-    def report_ppu_usage(self, phone_number: str) -> bool:
-        """
-        Report one route unit to Stripe metered billing for ppu users.
-        Non-fatal — route was already delivered; a failure only affects invoicing.
-        """
-        try:
-            with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number, deleted_at=None
-                ).first()
-                if not user or not user.stripe_subscription_id:
-                    logger.warning(f"report_ppu_usage: no subscription for {phone_number}")
-                    return False
-
-                sub = stripe.Subscription.retrieve(user.stripe_subscription_id)
-                item_id = sub['items']['data'][0]['id']
-
-                stripe.SubscriptionItem.create_usage_record(
-                    item_id,
-                    quantity=1,
-                    timestamp='now',
-                    action='increment',
-                )
-
-                audit = AuditLog.log_action(
-                    user_id=user.user_id,
-                    action='ppu_usage_reported',
-                    actor='system',
-                    details={'routes_used_lifetime': user.routes_used_lifetime}
-                )
-                session.add(audit)
-                logger.info(f"PPU usage reported for {phone_number}")
-                return True
-
-        except stripe.StripeError as e:
-            logger.error(f"Stripe error reporting PPU usage for {phone_number}: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"Error reporting PPU usage for {phone_number}: {e}", exc_info=True)
-            return False
 
     # ------------------------------------------------------------------
     # Webhook dispatcher
@@ -270,7 +239,6 @@ class StripeManager:
     def _handle_checkout_completed(self, event: dict) -> None:
         session_obj = event['data']['object']
         phone_number = session_obj.get('client_reference_id')
-        subscription_id = session_obj.get('subscription')
 
         if not phone_number:
             logger.error("checkout.session.completed: missing client_reference_id")
@@ -289,12 +257,22 @@ class StripeManager:
                 logger.warning(f"checkout.session.completed: no pending_tier for {phone_number} — possible duplicate event")
                 return
 
-            # Idempotency: skip if already on this tier
-            if user.tier == tier and user.stripe_subscription_id == subscription_id:
-                logger.info(f"checkout.session.completed: already activated tier={tier} for {phone_number}")
-                return
+            if tier == 'ppu':
+                # One-time payment: add 1 route credit
+                user.ppu_credits = (user.ppu_credits or 0) + 1
+                if user.tier != 'ppu':
+                    user.tier = 'ppu'
+                    user.tier_started_at = datetime.now(timezone.utc)
+                    user.tier_expires_at = None
+            else:
+                # Subscription: activate tier
+                subscription_id = session_obj.get('subscription')
+                # Idempotency: skip if already on this tier with same subscription
+                if user.tier == tier and user.stripe_subscription_id == subscription_id:
+                    logger.info(f"checkout.session.completed: already activated tier={tier} for {phone_number}")
+                    return
+                self._activate_tier(user, tier, subscription_id, db_session)
 
-            self._activate_tier(user, tier, subscription_id, db_session)
             user.pending_tier = None
             user.checkout_created_at = None
 
@@ -306,11 +284,12 @@ class StripeManager:
                     'stripe_session_id': session_obj.get('id'),
                     'tier': tier,
                     'amount_total': session_obj.get('amount_total'),
+                    'ppu_credits': user.ppu_credits if tier == 'ppu' else None,
                 }
             )
             db_session.add(audit)
 
-        logger.info(f"checkout.session.completed: tier={tier} activated for {phone_number}")
+        logger.info(f"checkout.session.completed: tier={tier} processed for {phone_number}")
 
         # Send WhatsApp confirmation
         self._send_payment_confirmation(phone_number, tier)
@@ -443,20 +422,22 @@ class StripeManager:
             from .message_sender import MessageSender
             display_name, price, limit = TIER_DISPLAY.get(tier, (tier, '', ''))
             if tier == 'ppu':
-                validity = 'sin límite de tiempo'
-                routes_info = 'Pago por ruta usada (facturación mensual)'
+                msg = (
+                    f"✅ *¡Pago confirmado! Tienes 1 crédito de ruta.*\n\n"
+                    f"Ahora envíame las direcciones que quieres optimizar 🗺️\n\n"
+                    f"Cada crédito vale para 1 ruta optimizada.\n"
+                    f"Escribe *pagos* para ver tu saldo."
+                )
             else:
                 validity = '30 días desde hoy'
-                routes_info = limit
-
-            msg = (
-                f"✅ *¡Pago confirmado!*\n\n"
-                f"Bienvenido al plan *{display_name}*. Ya puedes enviarme tus rutas 🚀\n\n"
-                f"📦 *Tu plan:* {display_name}\n"
-                f"🗺️ *Rutas:* {routes_info}\n"
-                f"📅 *Válido:* {validity}\n\n"
-                f"Escribe *pagos* en cualquier momento para ver o cambiar tu plan."
-            )
+                msg = (
+                    f"✅ *¡Pago confirmado!*\n\n"
+                    f"Bienvenido al plan *{display_name}*. Ya puedes enviarme tus rutas 🚀\n\n"
+                    f"📦 *Tu plan:* {display_name}\n"
+                    f"🗺️ *Rutas:* {limit}\n"
+                    f"📅 *Válido:* {validity}\n\n"
+                    f"Escribe *pagos* en cualquier momento para ver o cambiar tu plan."
+                )
             MessageSender().provider.send(phone_number, msg)
         except Exception as e:
             logger.error(f"Could not send payment confirmation to {phone_number}: {e}")

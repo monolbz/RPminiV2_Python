@@ -40,9 +40,9 @@ TIER_CONFIG = {
         'days': 30,
     },
     'ppu': {
-        'daily_limit': 10,   # Safety cap — not shown to user unless hit
+        'daily_limit': None,   # Gated by ppu_credits, not daily cap
         'lifetime_limit': None,
-        'days': None,        # No expiry
+        'days': None,          # No expiry
     },
     'premium': {
         'daily_limit': 2,
@@ -155,7 +155,14 @@ def check_route_allowed(phone_number: str) -> Tuple[bool, str]:
                 user.routes_used_today = 0
                 user.routes_reset_date = today_utc
 
-            # 2. Check tier expiry (all tiers except ppu)
+            # 2. PPU: check pre-paid credits balance
+            if user.tier == 'ppu':
+                if (user.ppu_credits or 0) <= 0:
+                    _log_blocked(session, user, 'no_credits')
+                    return False, _blocked_message('ppu', reason='no_credits', phone_number=phone_number)
+                return True, ''
+
+            # 3. Check tier expiry (all tiers except ppu)
             if user.tier_expires_at is not None:
                 expires_at = user.tier_expires_at
                 if expires_at.tzinfo is None:
@@ -164,13 +171,13 @@ def check_route_allowed(phone_number: str) -> Tuple[bool, str]:
                     _log_blocked(session, user, 'expired')
                     return False, _blocked_message(user.tier, reason='expired', phone_number=phone_number)
 
-            # 3. Check lifetime limit (free tier only)
+            # 4. Check lifetime limit (free tier only)
             if cfg['lifetime_limit'] is not None:
                 if user.routes_used_lifetime >= cfg['lifetime_limit']:
                     _log_blocked(session, user, 'lifetime_exhausted')
                     return False, _blocked_message(user.tier, reason='lifetime_exhausted', phone_number=phone_number)
 
-            # 4. Check daily limit (btester, ppu, premium, plus)
+            # 5. Check daily limit (btester, premium, plus)
             if cfg['daily_limit'] is not None:
                 if user.routes_used_today >= cfg['daily_limit']:
                     _log_blocked(session, user, 'daily_limit')
@@ -220,6 +227,8 @@ def record_route_used(phone_number: str) -> None:
 
             user.routes_used_lifetime += 1
             user.routes_used_today += 1
+            if user.tier == 'ppu':
+                user.ppu_credits = max(0, (user.ppu_credits or 0) - 1)
             user_tier = user.tier  # capture before session closes
 
             audit = AuditLog.log_action(
@@ -240,14 +249,6 @@ def record_route_used(phone_number: str) -> None:
 
     except Exception as e:
         logger.error(f"Error in record_route_used for {phone_number}: {e}", exc_info=True)
-
-    # Report metered usage to Stripe for ppu users (non-fatal)
-    if user_tier == 'ppu':
-        try:
-            from .stripe_manager import StripeManager
-            StripeManager().report_ppu_usage(phone_number)
-        except Exception as e:
-            logger.error(f"PPU usage reporting failed for {phone_number}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -274,7 +275,21 @@ def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None)
     Includes Stripe Checkout links when phone_number is provided.
     Falls back gracefully if Stripe is not configured.
     """
-    if reason == 'daily_limit':
+    if reason == 'no_credits':
+        # PPU user has 0 credits — must buy one before route is delivered
+        opening = "💳 *Para optimizar esta ruta necesitas 1 crédito (€1,99 IVA inc.).*"
+        if phone_number:
+            upgrade = _get_upgrade_block(phone_number, ['ppu'])
+            if upgrade:
+                return (
+                    f"{opening}\n\n"
+                    f"{upgrade}\n\n"
+                    "_Tras pagar, vuelve a enviar tus direcciones para recibir la ruta optimizada. "
+                    "Pago seguro con Stripe 🔒_"
+                )
+        return f"{opening}\n\n💳 Los pagos estarán disponibles muy pronto."
+
+    elif reason == 'daily_limit':
         # User hit their daily cap — offer upgrade to plus
         opening = (
             f"⛔ *Has alcanzado el límite diario de tu plan* ({tier}).\n\n"
