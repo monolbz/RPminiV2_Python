@@ -494,7 +494,8 @@ class MessageProcessor:
         try:
             stripe_mgr = StripeManager()
             upgrade_block = stripe_mgr.get_upgrade_options(from_number, ['ppu', 'premium', 'plus'])
-        except Exception:
+        except Exception as e:
+            logger.error(f"_handle_pagos_command: Stripe unavailable for {from_number}: {e}", exc_info=True)
             upgrade_block = ""
 
         if upgrade_block:
