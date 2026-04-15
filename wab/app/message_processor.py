@@ -499,7 +499,7 @@ class MessageProcessor:
                 f"🎫 *Créditos disponibles:* {ppu_credits}\n"
                 f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
                 f"{'─' * 20}\n"
-                f"💡 *Recargar créditos (1 ruta = €1,99):*\n\n"
+                f"💡 *Recargar créditos:*\n\n"
             )
         elif tier in {'premium', 'plus'}:
             display_name_tier, price, _ = TIER_DISPLAY.get(tier, (tier, '', ''))
@@ -537,10 +537,16 @@ class MessageProcessor:
 
         if ppu_link:
             if tier == 'ppu':
-                # PPU user: top-up only
+                # PPU user: top-up + option to switch to subscription
                 reply_text = (
                     f"{plan_section}"
                     f"{ppu_link}\n\n"
+                    "O\n\n"
+                    "💡 *Cambiar plan:*\n\n"
+                    "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                    "Responde *premium* para obtener el enlace de pago.\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€/mes!\n"
+                    "Responde *plus* para obtener el enlace de pago.\n\n"
                     "_Pago seguro con Stripe 🔒_"
                 )
             else:
