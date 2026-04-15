@@ -541,8 +541,7 @@ class MessageProcessor:
                 reply_text = (
                     f"{plan_section}"
                     f"{ppu_link}\n\n"
-                    "O\n\n"
-                    "💡 *Cambiar plan:*\n\n"
+                    "💡 *O suscríbete a un plan:*\n\n"
                     "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
                     "Responde *premium* para obtener el enlace de pago.\n\n"
                     "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€/mes!\n"
