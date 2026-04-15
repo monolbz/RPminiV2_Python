@@ -320,10 +320,10 @@ def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None)
             return (
                 f"{opening}\n\n"
                 f"{upgrade}\n\n"
-                "⭐ *Premium* — €29,99/mes (2 rutas/día)\n"
-                "_Responde *premium* para el enlace de pago._\n\n"
-                "🚀 *Plus* — €49,99/mes (4 rutas/día)\n"
-                "_Responde *plus* para el enlace de pago._\n\n"
+                "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                "Responde *premium* para el enlace de pago.\n\n"
+                "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€/mes!\n"
+                "Responde *plus* para el enlace de pago.\n\n"
                 "_Precios con IVA. Pago seguro con Stripe 🔒_"
             )
 

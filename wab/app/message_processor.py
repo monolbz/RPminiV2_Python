@@ -128,6 +128,7 @@ class MessageProcessor:
                 '/deletedata', 'deletedata', '/borrar', 'borrar', '/eliminar', 'eliminar',
                 '/revokeconsent', 'revokeconsent', '/revocar', 'revocar',
                 '/pagos', 'pagos', '/pago', 'pago',
+                '/precios', 'precios',
                 'premium', 'plus',
                 'cancelar suscripción', 'cancelar suscripcion',
             }
@@ -149,6 +150,10 @@ class MessageProcessor:
             # Command: /about or /info
             if message_lower in ['/about', '/info', 'about', 'info']:
                 return self._handle_about_command(from_number, phone_number_id, display_name)
+
+            # Command: /precios (show plan descriptions)
+            if message_lower in ['/precios', 'precios']:
+                return self._handle_precios_command(from_number, phone_number_id)
 
             # Command: /pagos (show plan + payment options)
             if message_lower in ['/pagos', 'pagos', '/pago', 'pago']:
@@ -435,6 +440,23 @@ class MessageProcessor:
         )
         return self._create_response(from_number, phone_number_id, reply_text)
 
+    def _handle_precios_command(self, from_number, phone_number_id):
+        """Handle /precios command — static description of all plans."""
+        reply_text = (
+            "💳 *Mi Ruta Pro — Precios*\n\n"
+            "📦 *Pago por uso* — €1,99 por ruta\n"
+            "Sin suscripción. Pagas solo cuando necesites optimizar.\n"
+            "Sin fecha de caducidad.\n\n"
+            "⭐ *Premium* — €29,99/mes\n"
+            "Hasta 2 rutas optimizadas al día.\n"
+            "Ideal para uso regular. ¡Ahorra hasta un 60% al mes!\n\n"
+            "🚀 *Plus* — €49,99/mes\n"
+            "Hasta 4 rutas optimizadas al día.\n"
+            "Perfecto para uso profesional. ¡Ahorra hasta 180€ al mes!\n\n"
+            "Escribe *pagos* para contratar un plan."
+        )
+        return self._create_response(from_number, phone_number_id, reply_text)
+
     def _handle_pagos_command(self, from_number, phone_number_id, display_name):
         """Handle /pagos command — show current plan + payment options."""
         if not consent_manager.has_consent(from_number):
@@ -526,10 +548,10 @@ class MessageProcessor:
                 reply_text = (
                     f"{plan_section}"
                     f"{ppu_link}\n\n"
-                    "⭐ *Premium* — €29,99/mes (2 rutas/día)\n"
-                    "_Responde *premium* para obtener el enlace de pago._\n\n"
-                    "🚀 *Plus* — €49,99/mes (4 rutas/día)\n"
-                    "_Responde *plus* para obtener el enlace de pago._\n\n"
+                    "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                    "Responde *premium* para obtener el enlace de pago.\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€/mes!\n"
+                    "Responde *plus* para obtener el enlace de pago.\n\n"
                     "_Precios con IVA. Pago seguro con Stripe 🔒_"
                 )
         else:
