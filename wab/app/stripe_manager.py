@@ -126,6 +126,7 @@ class StripeManager:
                 session = stripe.checkout.Session.create(
                     customer=customer_id,
                     client_reference_id=phone_number,
+                    metadata={'tier': tier, 'phone_number': phone_number},
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='payment',
                     locale='es',
@@ -137,6 +138,7 @@ class StripeManager:
                 session = stripe.checkout.Session.create(
                     customer=customer_id,
                     client_reference_id=phone_number,
+                    metadata={'tier': tier, 'phone_number': phone_number},
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='subscription',
                     locale='es',
@@ -252,9 +254,11 @@ class StripeManager:
                 logger.error(f"checkout.session.completed: no user for {phone_number}")
                 return
 
-            tier = user.pending_tier
+            # Read tier from session metadata (authoritative — set at session creation)
+            # Fallback to pending_tier for sessions created before this fix
+            tier = (session_obj.get('metadata') or {}).get('tier') or user.pending_tier
             if not tier:
-                logger.warning(f"checkout.session.completed: no pending_tier for {phone_number} — possible duplicate event")
+                logger.warning(f"checkout.session.completed: could not determine tier for {phone_number} — ignoring")
                 return
 
             if tier == 'ppu':
