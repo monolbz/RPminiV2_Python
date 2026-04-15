@@ -378,11 +378,10 @@ class StripeManager:
                 return
 
             old_tier = user.tier
-            routes_remaining = max(0, (user.routes_used_today or 0))
-            user.tier = 'free'
+            ppu_credits = user.ppu_credits or 0
+            user.tier = 'ppu'
             user.tier_started_at = datetime.now(timezone.utc)
-            from datetime import timedelta
-            user.tier_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+            user.tier_expires_at = None
             user.stripe_subscription_id = None
             user.stripe_price_id = None
 
@@ -390,12 +389,13 @@ class StripeManager:
                 user_id=user.user_id,
                 action='subscription_cancelled',
                 actor='system',
-                details={'previous_tier': old_tier, 'stripe_subscription_id': subscription_id}
+                details={'previous_tier': old_tier, 'stripe_subscription_id': subscription_id,
+                         'ppu_credits': ppu_credits}
             )
             db_session.add(audit)
             phone_number = user.phone_number
 
-        logger.info(f"subscription.deleted: downgraded {phone_number} from {old_tier} to free")
+        logger.info(f"subscription.deleted: downgraded {phone_number} from {old_tier} to ppu (credits={ppu_credits})")
         self._send_subscription_cancelled(phone_number)
 
     def _activate_tier(self, user: User, tier: str, subscription_id: str, session) -> None:
@@ -464,8 +464,9 @@ class StripeManager:
             from .message_sender import MessageSender
             msg = (
                 "ℹ️ *Tu suscripción ha sido cancelada.*\n\n"
-                "Has vuelto al plan gratuito.\n\n"
-                "Cuando quieras reactivar tu plan, escribe *pagos*."
+                "Has pasado al modo *Pago por uso*. "
+                "Puedes seguir optimizando rutas a €1,99 por ruta, sin suscripción.\n\n"
+                "Escribe *pagos* para recargar créditos o reactivar un plan."
             )
             MessageSender().provider.send(phone_number, msg)
         except Exception as e:
