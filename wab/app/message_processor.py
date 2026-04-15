@@ -128,6 +128,7 @@ class MessageProcessor:
                 '/deletedata', 'deletedata', '/borrar', 'borrar', '/eliminar', 'eliminar',
                 '/revokeconsent', 'revokeconsent', '/revocar', 'revocar',
                 '/pagos', 'pagos', '/pago', 'pago',
+                'premium', 'plus',
                 'cancelar suscripción', 'cancelar suscripcion',
             }
             if message_lower not in _gdpr_commands:
@@ -152,6 +153,10 @@ class MessageProcessor:
             # Command: /pagos (show plan + payment options)
             if message_lower in ['/pagos', 'pagos', '/pago', 'pago']:
                 return self._handle_pagos_command(from_number, phone_number_id, display_name)
+
+            # Commands: premium / plus (return single checkout link)
+            if message_lower in ['premium', 'plus']:
+                return self._handle_plan_link_command(from_number, phone_number_id, message_lower)
 
             # Command: cancelar suscripción
             if message_lower in ['cancelar suscripción', 'cancelar suscripcion',
@@ -499,27 +504,63 @@ class MessageProcessor:
                 f"💡 *Elige un plan para continuar:*\n\n"
             )
 
-        # Build upgrade options — PPU users only see credit top-up
-        tiers_to_show = ['ppu'] if tier == 'ppu' else ['ppu', 'premium', 'plus']
+        # Always show only 1 URL (PPU) to stay under Twilio's 1600-char limit.
+        # Premium/Plus are shown as text only; user replies with plan name to get link.
         try:
             stripe_mgr = StripeManager()
-            upgrade_block = stripe_mgr.get_upgrade_options(from_number, tiers_to_show)
+            ppu_link = stripe_mgr.get_checkout_link_message(from_number, 'ppu')
         except Exception as e:
             logger.error(f"_handle_pagos_command: Stripe unavailable for {from_number}: {e}", exc_info=True)
-            upgrade_block = ""
+            ppu_link = ""
 
-        if upgrade_block:
-            reply_text = (
-                f"{plan_section}"
-                f"{upgrade_block}\n\n"
-                f"_Los precios incluyen IVA. Pago seguro con Stripe 🔒_\n\n"
-                f"❓ Para cancelar tu suscripción, escribe *cancelar suscripción*."
-            )
+        if ppu_link:
+            if tier == 'ppu':
+                # PPU user: top-up only
+                reply_text = (
+                    f"{plan_section}"
+                    f"{ppu_link}\n\n"
+                    "_Pago seguro con Stripe 🔒_"
+                )
+            else:
+                # Free/expired/btester: show all plans, PPU with link, others as text
+                reply_text = (
+                    f"{plan_section}"
+                    f"{ppu_link}\n\n"
+                    "⭐ *Premium* — €29,99/mes (2 rutas/día)\n"
+                    "_Responde *premium* para obtener el enlace de pago._\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día)\n"
+                    "_Responde *plus* para obtener el enlace de pago._\n\n"
+                    "_Precios con IVA. Pago seguro con Stripe 🔒_"
+                )
         else:
             reply_text = (
                 f"{plan_section}"
                 "💳 Los pagos estarán disponibles muy pronto."
             )
+
+        return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _handle_plan_link_command(self, from_number, phone_number_id, tier: str):
+        """Return a single checkout link for 'premium' or 'plus' plan."""
+        if not consent_manager.has_consent(from_number):
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        from .stripe_manager import StripeManager, TIER_DISPLAY
+        try:
+            link = StripeManager().get_checkout_link_message(from_number, tier)
+        except Exception as e:
+            logger.error(f"_handle_plan_link_command: Stripe error for {from_number} tier={tier}: {e}")
+            link = ""
+
+        if link:
+            display_name_tier, price, limit = TIER_DISPLAY.get(tier, (tier, '', ''))
+            reply_text = (
+                f"💳 *{display_name_tier}* — {price} ({limit})\n\n"
+                f"{link}\n\n"
+                "_Precio con IVA incluido. Pago seguro con Stripe 🔒_"
+            )
+        else:
+            reply_text = "❌ No pude generar el enlace de pago. Intenta de nuevo en unos segundos."
 
         return self._create_response(from_number, phone_number_id, reply_text)
 
