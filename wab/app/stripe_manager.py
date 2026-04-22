@@ -262,7 +262,17 @@ class StripeManager:
                 return
 
             if tier == 'ppu':
-                # One-time payment: add 1 route credit
+                # One-time payment: add 1 route credit.
+                # Cancel any active subscription — user is switching to pay-per-use.
+                old_sub_id = user.stripe_subscription_id
+                if old_sub_id:
+                    try:
+                        stripe.Subscription.cancel(old_sub_id)
+                        user.stripe_subscription_id = None
+                        user.stripe_price_id = None
+                        logger.info(f"Cancelled subscription {old_sub_id} for {phone_number} (switching to ppu)")
+                    except stripe.StripeError as e:
+                        logger.error(f"Could not cancel subscription {old_sub_id} on ppu switch: {e}")
                 user.ppu_credits = (user.ppu_credits or 0) + 1
                 if user.tier != 'ppu':
                     user.tier = 'ppu'
@@ -275,6 +285,14 @@ class StripeManager:
                 if user.tier == tier and user.stripe_subscription_id == subscription_id:
                     logger.info(f"checkout.session.completed: already activated tier={tier} for {phone_number}")
                     return
+                # Cancel previous subscription if switching plans (e.g. Premium → Plus)
+                old_sub_id = user.stripe_subscription_id
+                if old_sub_id and old_sub_id != subscription_id:
+                    try:
+                        stripe.Subscription.cancel(old_sub_id)
+                        logger.info(f"Cancelled old subscription {old_sub_id} for {phone_number} (switching to {tier})")
+                    except stripe.StripeError as e:
+                        logger.error(f"Could not cancel old subscription {old_sub_id}: {e}")
                 self._activate_tier(user, tier, subscription_id, db_session)
 
             user.pending_tier = None
