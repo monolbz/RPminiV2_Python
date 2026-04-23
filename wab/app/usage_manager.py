@@ -180,6 +180,8 @@ def check_route_allowed(phone_number: str) -> Tuple[bool, str]:
             # 5. Check daily limit (btester, premium, plus)
             if cfg['daily_limit'] is not None:
                 if user.routes_used_today >= cfg['daily_limit']:
+                    if (user.ppu_credits or 0) > 0:
+                        return True, ''  # top-up credit covers this route; deducted in record_route_used
                     _log_blocked(session, user, 'daily_limit')
                     return False, _blocked_message(user.tier, reason='daily_limit', phone_number=phone_number)
 
@@ -225,9 +227,15 @@ def record_route_used(phone_number: str) -> None:
                 user.routes_used_today = 0
                 user.routes_reset_date = today_utc
 
+            cfg = TIER_CONFIG.get(user.tier, TIER_CONFIG['free'])
+            using_top_up_credit = (
+                cfg['daily_limit'] is not None
+                and user.routes_used_today >= cfg['daily_limit']
+                and (user.ppu_credits or 0) > 0
+            )
             user.routes_used_lifetime += 1
             user.routes_used_today += 1
-            if user.tier == 'ppu':
+            if user.tier == 'ppu' or using_top_up_credit:
                 user.ppu_credits = max(0, (user.ppu_credits or 0) - 1)
             user_tier = user.tier  # capture before session closes
 
@@ -285,12 +293,44 @@ def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None)
                     f"{opening}\n\n"
                     f"{upgrade}\n\n"
                     "_Tras pagar, vuelve a enviar tus direcciones para recibir la ruta optimizada. "
-                    "Pago seguro con Stripe 🔒_"
+                    "Pago seguro con Stripe 🔒_\n\n"
+                    "Aprovecha nuestros planes:\n\n"
+                    "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                    "Responde *premium* para suscribirte.\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€!\n"
+                    "Responde *plus* para suscribirte."
                 )
         return f"{opening}\n\n💳 Los pagos estarán disponibles muy pronto."
 
     elif reason == 'daily_limit':
-        # User hit their daily cap — offer upgrade to plus
+        if tier == 'btester':
+            opening = (
+                "⛔ *Has alcanzado el límite diario de tu plan* (Beta).\n\n"
+                "Mañana el contador se reinicia automáticamente 🌅\n\n"
+                "Para más rutas hoy:"
+            )
+            if phone_number:
+                upgrade = _get_upgrade_block(phone_number, ['ppu'])
+                if upgrade:
+                    return (
+                        f"{opening}\n\n"
+                        f"{upgrade}\n\n"
+                        "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                        "Responde *premium* para suscribirte.\n\n"
+                        "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€!\n"
+                        "Responde *plus* para suscribirte.\n\n"
+                        "_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
+                    )
+            return f"{opening}\n\n💳 Los pagos estarán disponibles muy pronto."
+
+        if tier == 'plus':
+            return (
+                "⛔ *Has alcanzado el límite diario de tu plan* (plus).\n\n"
+                "Mañana el contador se reinicia automáticamente 🌅\n\n"
+                "Gracias por usar nuestros servicios."
+            )
+
+        # premium
         opening = (
             f"⛔ *Has alcanzado el límite diario de tu plan* ({tier}).\n\n"
             "Mañana el contador se reinicia automáticamente 🌅\n\n"

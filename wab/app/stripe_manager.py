@@ -263,21 +263,26 @@ class StripeManager:
 
             if tier == 'ppu':
                 # One-time payment: add 1 route credit.
-                # Cancel any active subscription — user is switching to pay-per-use.
-                old_sub_id = user.stripe_subscription_id
-                if old_sub_id:
-                    try:
-                        stripe.Subscription.cancel(old_sub_id)
-                        user.stripe_subscription_id = None
-                        user.stripe_price_id = None
-                        logger.info(f"Cancelled subscription {old_sub_id} for {phone_number} (switching to ppu)")
-                    except stripe.StripeError as e:
-                        logger.error(f"Could not cancel subscription {old_sub_id} on ppu switch: {e}")
-                user.ppu_credits = (user.ppu_credits or 0) + 1
-                if user.tier != 'ppu':
-                    user.tier = 'ppu'
-                    user.tier_started_at = datetime.now(timezone.utc)
-                    user.tier_expires_at = None
+                if user.tier in ('btester', 'premium', 'plus'):
+                    # Top-up for active subscriber — keep their plan intact
+                    user.ppu_credits = (user.ppu_credits or 0) + 1
+                    logger.info(f"Added PPU top-up credit for {phone_number} (tier={user.tier}, credits={user.ppu_credits})")
+                else:
+                    # User on free/ppu — cancel any subscription and switch to PPU mode
+                    old_sub_id = user.stripe_subscription_id
+                    if old_sub_id:
+                        try:
+                            stripe.Subscription.cancel(old_sub_id)
+                            user.stripe_subscription_id = None
+                            user.stripe_price_id = None
+                            logger.info(f"Cancelled subscription {old_sub_id} for {phone_number} (switching to ppu)")
+                        except stripe.StripeError as e:
+                            logger.error(f"Could not cancel subscription {old_sub_id} on ppu switch: {e}")
+                    user.ppu_credits = (user.ppu_credits or 0) + 1
+                    if user.tier != 'ppu':
+                        user.tier = 'ppu'
+                        user.tier_started_at = datetime.now(timezone.utc)
+                        user.tier_expires_at = None
             else:
                 # Subscription: activate tier
                 subscription_id = session_obj.get('subscription')
