@@ -324,11 +324,20 @@ def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None)
             return f"{opening}\n\n💳 Los pagos estarán disponibles muy pronto."
 
         if tier == 'plus':
-            return (
+            opening = (
                 "⛔ *Has alcanzado el límite diario de tu plan* (plus).\n\n"
                 "Mañana el contador se reinicia automáticamente 🌅\n\n"
-                "Gracias por usar nuestros servicios."
+                "Para más rutas hoy:"
             )
+            if phone_number:
+                upgrade = _get_upgrade_block(phone_number, ['ppu'])
+                if upgrade:
+                    return (
+                        f"{opening}\n\n"
+                        f"{upgrade}\n\n"
+                        "_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
+                    )
+            return f"{opening}\n\nGracias por usar nuestros servicios."
 
         # premium
         opening = (
