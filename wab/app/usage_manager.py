@@ -332,14 +332,21 @@ def _blocked_message(tier: str, reason: str, phone_number: Optional[str] = None)
 
         # premium
         opening = (
-            f"⛔ *Has alcanzado el límite diario de tu plan* ({tier}).\n\n"
+            "⛔ *Has alcanzado el límite diario de tu plan* (premium).\n\n"
             "Mañana el contador se reinicia automáticamente 🌅\n\n"
-            "Para más rutas hoy, actualiza a *Plus* (4 rutas/día):"
+            "Para más rutas hoy:"
         )
         if phone_number:
-            upgrade = _get_upgrade_block(phone_number, ['plus'])
+            upgrade = _get_upgrade_block(phone_number, ['ppu'])
             if upgrade:
-                return f"{opening}\n\n{upgrade}\n\n_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
+                return (
+                    f"{opening}\n\n"
+                    f"{upgrade}\n\n"
+                    "*Pásate a Plus:*\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€!\n"
+                    "Responde *plus* para suscribirte.\n\n"
+                    "_Los precios incluyen IVA. Pago seguro con Stripe 🔒_"
+                )
         return f"{opening}\n\n💳 Los pagos estarán disponibles muy pronto."
 
     elif reason == 'lifetime_exhausted':

@@ -580,9 +580,7 @@ class MessageProcessor:
             link = ""
 
         if link:
-            display_name_tier, price, limit = TIER_DISPLAY.get(tier, (tier, '', ''))
             reply_text = (
-                f"💳 *{display_name_tier}* — {price} ({limit})\n\n"
                 f"{link}\n\n"
                 "_Precio con IVA incluido. Pago seguro con Stripe 🔒_"
             )
