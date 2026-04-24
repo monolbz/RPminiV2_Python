@@ -261,10 +261,12 @@ class StripeManager:
                 logger.warning(f"checkout.session.completed: could not determine tier for {phone_number} — ignoring")
                 return
 
+            is_topup = False
             if tier == 'ppu':
                 # One-time payment: add 1 route credit.
                 if user.tier in ('btester', 'premium', 'plus'):
                     # Top-up for active subscriber — keep their plan intact
+                    is_topup = True
                     user.ppu_credits = (user.ppu_credits or 0) + 1
                     logger.info(f"Added PPU top-up credit for {phone_number} (tier={user.tier}, credits={user.ppu_credits})")
                 else:
@@ -283,6 +285,7 @@ class StripeManager:
                         user.tier = 'ppu'
                         user.tier_started_at = datetime.now(timezone.utc)
                         user.tier_expires_at = None
+            ppu_credits_after = user.ppu_credits or 0
             else:
                 # Subscription: activate tier
                 subscription_id = session_obj.get('subscription')
@@ -319,7 +322,7 @@ class StripeManager:
         logger.info(f"checkout.session.completed: tier={tier} processed for {phone_number}")
 
         # Send WhatsApp confirmation
-        self._send_payment_confirmation(phone_number, tier)
+        self._send_payment_confirmation(phone_number, tier, ppu_credits=ppu_credits_after, is_topup=is_topup)
 
     def _handle_invoice_paid(self, event: dict) -> None:
         invoice = event['data']['object']
@@ -444,17 +447,25 @@ class StripeManager:
     # WhatsApp notifications (sent after DB session closes)
     # ------------------------------------------------------------------
 
-    def _send_payment_confirmation(self, phone_number: str, tier: str) -> None:
+    def _send_payment_confirmation(self, phone_number: str, tier: str, ppu_credits: int = 1, is_topup: bool = False) -> None:
         try:
             from .message_sender import MessageSender
             display_name, price, limit = TIER_DISPLAY.get(tier, (tier, '', ''))
             if tier == 'ppu':
-                msg = (
-                    f"✅ *¡Pago confirmado! Tienes 1 crédito de ruta.*\n\n"
-                    f"Ahora envíame las direcciones que quieres optimizar 🗺️\n\n"
-                    f"Cada crédito vale para 1 ruta optimizada.\n"
-                    f"Escribe *pagos* para ver tu saldo."
-                )
+                credits_word = "crédito" if ppu_credits == 1 else "créditos"
+                if is_topup:
+                    msg = (
+                        f"✅ *¡Pago confirmado! Tienes {ppu_credits} {credits_word} disponible{'s' if ppu_credits != 1 else ''}.*\n\n"
+                        f"Tus créditos se usarán automáticamente cuando alcances el límite diario de tu plan 🗺️\n\n"
+                        f"Escribe *pagos* para ver tu saldo."
+                    )
+                else:
+                    msg = (
+                        f"✅ *¡Pago confirmado! Tienes {ppu_credits} {credits_word} de ruta.*\n\n"
+                        f"Ahora envíame las direcciones que quieres optimizar 🗺️\n\n"
+                        f"Cada crédito vale para 1 ruta optimizada.\n"
+                        f"Escribe *pagos* para ver tu saldo."
+                    )
             else:
                 validity = '30 días desde hoy'
                 msg = (
