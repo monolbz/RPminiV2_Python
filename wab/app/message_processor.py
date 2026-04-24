@@ -633,13 +633,9 @@ class MessageProcessor:
 
             stripe.api_key = config.STRIPE_SECRET_KEY
             stripe.Subscription.cancel(sub_id)
-
-            return self._create_response(
-                from_number, phone_number_id,
-                "✅ *Suscripción cancelada.*\n\n"
-                "Has vuelto al plan gratuito. Puedes reactivar tu plan cuando quieras "
-                "escribiendo *pagos*."
-            )
+            # No reply here — the customer.subscription.deleted webhook fires within
+            # seconds and sends the accurate confirmation message.
+            return None
 
         except Exception as e:
             logger.error(f"Cancel subscription error for {from_number}: {e}", exc_info=True)
