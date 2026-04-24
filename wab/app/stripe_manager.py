@@ -285,7 +285,6 @@ class StripeManager:
                         user.tier = 'ppu'
                         user.tier_started_at = datetime.now(timezone.utc)
                         user.tier_expires_at = None
-            ppu_credits_after = user.ppu_credits or 0
             else:
                 # Subscription: activate tier
                 subscription_id = session_obj.get('subscription')
@@ -303,6 +302,7 @@ class StripeManager:
                         logger.error(f"Could not cancel old subscription {old_sub_id}: {e}")
                 self._activate_tier(user, tier, subscription_id, db_session)
 
+            ppu_credits_after = user.ppu_credits or 0
             user.pending_tier = None
             user.checkout_created_at = None
 
