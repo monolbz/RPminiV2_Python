@@ -580,10 +580,29 @@ class MessageProcessor:
             link = ""
 
         if link:
-            reply_text = (
-                f"{link}\n\n"
+            # Check if user is already on a paid subscription (plan change scenario)
+            changing_plan = False
+            try:
+                from database.db_manager import get_db_manager
+                from database.models import User
+                db = get_db_manager()
+                with db.get_session() as session:
+                    user = session.query(User).filter_by(
+                        phone_number=from_number, deleted_at=None
+                    ).first()
+                    if user and user.stripe_subscription_id and user.tier in ('premium', 'plus'):
+                        changing_plan = True
+            except Exception:
+                pass
+
+            disclaimer = (
+                "_Precio con IVA incluido. Pago seguro con Stripe 🔒_\n\n"
+                "⚠️ _El nuevo plan se factura completo desde hoy. Al cambiar de plan, los días restantes de tu plan actual "
+                "no se reembolsan automáticamente. Para solicitar un reembolso proporcional contacta con support@mirutapro.es_"
+                if changing_plan else
                 "_Precio con IVA incluido. Pago seguro con Stripe 🔒_"
             )
+            reply_text = f"{link}\n\n{disclaimer}"
         else:
             reply_text = "❌ No pude generar el enlace de pago. Intenta de nuevo en unos segundos."
 
