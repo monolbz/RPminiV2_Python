@@ -263,6 +263,17 @@ class StripeManager:
 
             is_topup = False
             if tier == 'ppu':
+                # Idempotency: skip if this session was already processed
+                session_id = session_obj.get('id')
+                already_processed = db_session.query(AuditLog).filter(
+                    AuditLog.user_id == user.user_id,
+                    AuditLog.action == 'payment_completed',
+                    AuditLog.details['stripe_session_id'].astext == session_id
+                ).first()
+                if already_processed:
+                    logger.info(f"checkout.session.completed: duplicate PPU event {session_id} for {phone_number} — skipping")
+                    return
+
                 # One-time payment: add 1 route credit.
                 if user.tier in ('btester', 'premium', 'plus'):
                     # Top-up for active subscriber — keep their plan intact
