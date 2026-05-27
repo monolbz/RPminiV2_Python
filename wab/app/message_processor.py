@@ -567,11 +567,33 @@ class MessageProcessor:
 
         return self._create_response(from_number, phone_number_id, reply_text)
 
+    def _log_command(self, phone_number: str, command: str) -> None:
+        """Log a legally significant inbound command to AuditLog."""
+        try:
+            from database.db_manager import get_db_manager
+            from database.models import User, AuditLog
+            db = get_db_manager()
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=phone_number, deleted_at=None
+                ).first()
+                if user:
+                    audit = AuditLog.log_action(
+                        user_id=user.user_id,
+                        action='command_received',
+                        actor='user',
+                        details={'command': command}
+                    )
+                    session.add(audit)
+        except Exception as e:
+            logger.error(f"_log_command failed for {phone_number} command={command}: {e}")
+
     def _handle_plan_link_command(self, from_number, phone_number_id, tier: str):
         """Return a single checkout link for 'premium' or 'plus' plan."""
         if not consent_manager.has_consent(from_number):
             return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
 
+        self._log_command(from_number, tier)
         from .stripe_manager import StripeManager, TIER_DISPLAY
         from database.db_manager import get_db_manager
         from database.models import User
@@ -638,6 +660,7 @@ class MessageProcessor:
         if not consent_manager.has_consent(from_number):
             return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
 
+        self._log_command(from_number, 'cancelar suscripción')
         from database.db_manager import get_db_manager
         from database.models import User
         import stripe
@@ -760,6 +783,7 @@ class MessageProcessor:
     def _handle_deletedata_command(self, from_number, phone_number_id, display_name):
         """Handle /deletedata command - GDPR Article 17 (Right to erasure)."""
         logger.info(f"User {from_number} requested data deletion")
+        self._log_command(from_number, 'deletedata')
 
         consent_data = consent_manager.export_user_consent_data(from_number)
 
@@ -799,6 +823,7 @@ class MessageProcessor:
     def _handle_revokeconsent_command(self, from_number, phone_number_id, display_name):
         """Handle /revokeconsent command - GDPR Article 7.3 (Withdraw consent)."""
         logger.info(f"User {from_number} requested consent revocation")
+        self._log_command(from_number, 'revokeconsent')
 
         if not consent_manager.has_consent(from_number):
             reply_text = (
