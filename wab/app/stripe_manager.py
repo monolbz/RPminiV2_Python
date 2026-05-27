@@ -130,6 +130,8 @@ class StripeManager:
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='payment',
                     locale='es',
+                    automatic_tax={'enabled': True},
+                    customer_update={'address': 'auto'},
                     success_url=self.config.STRIPE_SUCCESS_URL,
                     cancel_url=self.config.STRIPE_CANCEL_URL,
                 )
