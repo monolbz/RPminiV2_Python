@@ -26,7 +26,7 @@ from ..utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 TIER_DISPLAY = {
-    'ppu':     ('📦 Pago por uso',  '€1,99 por ruta',         'sin límite de tiempo'),
+    'ppu':     ('📦 Pago por uso',  '€1,99 por ruta',         ''),
     'premium': ('⭐ Premium',        '€29,99/mes',             '2 rutas/día'),
     'plus':    ('🚀 Plus',           '€49,99/mes',             '4 rutas/día'),
 }
@@ -226,6 +226,8 @@ class StripeManager:
                 self._handle_invoice_payment_failed(event)
             elif event_type == 'customer.subscription.deleted':
                 self._handle_subscription_deleted(event)
+            elif event_type == 'charge.dispute.created':
+                self._handle_dispute_created(event)
             else:
                 logger.info(f"Stripe webhook: unhandled event type {event_type} — ignored")
         except Exception as e:
@@ -504,6 +506,62 @@ class StripeManager:
         except Exception as e:
             logger.error(f"Could not send payment failed warning to {phone_number}: {e}")
 
+    def _handle_dispute_created(self, event: dict) -> None:
+        dispute = event['data']['object']
+        dispute_id = dispute.get('id')
+        charge_id = dispute.get('charge')
+        amount = dispute.get('amount', 0)
+        reason = dispute.get('reason', 'unknown')
+
+        # Look up the user via the disputed charge
+        phone_number = None
+        try:
+            charge = stripe.Charge.retrieve(charge_id)
+            customer_id = charge.get('customer')
+            if customer_id:
+                with self.db.get_session() as db_session:
+                    user = db_session.query(User).filter_by(
+                        stripe_customer_id=customer_id, deleted_at=None
+                    ).first()
+                    if not user:
+                        logger.warning(f"dispute.created: no user for customer {customer_id} (dispute {dispute_id})")
+                        return
+
+                    phone_number = user.phone_number
+                    old_tier = user.tier
+
+                    user.tier = 'free'
+                    user.tier_started_at = datetime.now(timezone.utc)
+                    user.tier_expires_at = None
+                    user.stripe_subscription_id = None
+                    user.stripe_price_id = None
+
+                    audit = AuditLog.log_action(
+                        user_id=user.user_id,
+                        action='access_suspended',
+                        actor='system',
+                        details={
+                            'reason': 'dispute',
+                            'dispute_id': dispute_id,
+                            'charge_id': charge_id,
+                            'amount': amount,
+                            'dispute_reason': reason,
+                            'previous_tier': old_tier,
+                        }
+                    )
+                    db_session.add(audit)
+
+                logger.warning(
+                    f"dispute.created: suspended access for {phone_number} "
+                    f"(dispute={dispute_id}, charge={charge_id}, reason={reason}, amount={amount})"
+                )
+        except Exception as e:
+            logger.error(f"Error handling dispute {dispute_id}: {e}", exc_info=True)
+            return
+
+        if phone_number:
+            self._send_dispute_suspension_notice(phone_number)
+
     def _send_subscription_cancelled(self, phone_number: str) -> None:
         try:
             from .message_sender import MessageSender
@@ -516,3 +574,14 @@ class StripeManager:
             MessageSender().provider.send(phone_number, msg)
         except Exception as e:
             logger.error(f"Could not send cancellation notice to {phone_number}: {e}")
+
+    def _send_dispute_suspension_notice(self, phone_number: str) -> None:
+        try:
+            from .message_sender import MessageSender
+            msg = (
+                "⚠️ *Tu acceso ha sido suspendido temporalmente.*\n\n"
+                "Contacta con nosotros en support@mirutapro.es para más información."
+            )
+            MessageSender().provider.send(phone_number, msg)
+        except Exception as e:
+            logger.error(f"Could not send dispute suspension notice to {phone_number}: {e}")
