@@ -507,7 +507,7 @@ class MessageProcessor:
                 valid_until = tier_expires_at.strftime("%d %b %Y")
                 validity_line = f"📅 *Válido hasta:* {valid_until}\n"
             else:
-                validity_line = "📅 *Validez:* sin límite de tiempo\n"
+                validity_line = "📅 *Validez:* 3 meses desde la compra\n"
             plan_section = (
                 f"💳 *Mi Ruta Pro — Tu plan actual*\n\n"
                 f"📦 *Plan:* {display_name_tier}\n"
@@ -573,6 +573,45 @@ class MessageProcessor:
             return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
 
         from .stripe_manager import StripeManager, TIER_DISPLAY
+        from database.db_manager import get_db_manager
+        from database.models import User
+
+        # Single DB lookup: used for same-plan block and plan-change disclaimer
+        user_tier = None
+        user_sub_id = None
+        user_expires_at = None
+        try:
+            db = get_db_manager()
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=from_number, deleted_at=None
+                ).first()
+                if user:
+                    user_tier = user.tier
+                    user_sub_id = user.stripe_subscription_id
+                    user_expires_at = user.tier_expires_at
+        except Exception:
+            pass
+
+        # Block same-plan repurchase
+        if user_tier == tier and user_sub_id:
+            display_name = TIER_DISPLAY.get(tier, (tier,))[0]
+            expires_str = (
+                user_expires_at.strftime("%d/%m/%Y")
+                if user_expires_at else "fecha no disponible"
+            )
+            other_plan = "plus" if tier == "premium" else None
+            upsell = (
+                f"Si quieres más rutas al día responde *{other_plan}* para cambiar de plan."
+                if other_plan else
+                "Tu suscripción se renueva automáticamente."
+            )
+            return self._create_response(
+                from_number, phone_number_id,
+                f"✅ *Ya tienes el plan {display_name} activo hasta el {expires_str}.*\n\n"
+                f"Tu suscripción se renueva automáticamente. {upsell}"
+            )
+
         try:
             link = StripeManager().get_checkout_link_message(from_number, tier)
         except Exception as e:
@@ -580,21 +619,7 @@ class MessageProcessor:
             link = ""
 
         if link:
-            # Check if user is already on a paid subscription (plan change scenario)
-            changing_plan = False
-            try:
-                from database.db_manager import get_db_manager
-                from database.models import User
-                db = get_db_manager()
-                with db.get_session() as session:
-                    user = session.query(User).filter_by(
-                        phone_number=from_number, deleted_at=None
-                    ).first()
-                    if user and user.stripe_subscription_id and user.tier in ('premium', 'plus'):
-                        changing_plan = True
-            except Exception:
-                pass
-
+            changing_plan = user_sub_id and user_tier in ('premium', 'plus')
             disclaimer = (
                 "_Precio con IVA incluido. Pago seguro con Stripe 🔒_\n\n"
                 "⚠️ _El nuevo plan se factura completo desde hoy. Al cambiar de plan, los días restantes de tu plan actual "
