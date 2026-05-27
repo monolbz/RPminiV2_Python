@@ -604,12 +604,12 @@ class MessageProcessor:
             upsell = (
                 f"Si quieres más rutas al día responde *{other_plan}* para cambiar de plan."
                 if other_plan else
-                "Tu suscripción se renueva automáticamente."
+                ""
             )
             return self._create_response(
                 from_number, phone_number_id,
                 f"✅ *Ya tienes el plan {display_name} activo hasta el {expires_str}.*\n\n"
-                f"Tu suscripción se renueva automáticamente. {upsell}"
+                f"Tu suscripción se renueva automáticamente.{' ' + upsell if upsell else ''}"
             )
 
         try:
