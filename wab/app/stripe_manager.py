@@ -132,6 +132,7 @@ class StripeManager:
                     locale='es',
                     automatic_tax={'enabled': True},
                     customer_update={'address': 'auto'},
+                    tax_id_collection={'enabled': True},
                     success_url=self.config.STRIPE_SUCCESS_URL,
                     cancel_url=self.config.STRIPE_CANCEL_URL,
                 )
@@ -146,6 +147,7 @@ class StripeManager:
                     locale='es',
                     automatic_tax={'enabled': True},
                     customer_update={'address': 'auto'},
+                    tax_id_collection={'enabled': True},
                     success_url=self.config.STRIPE_SUCCESS_URL,
                     cancel_url=self.config.STRIPE_CANCEL_URL,
                     subscription_data={
