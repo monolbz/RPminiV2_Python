@@ -8,7 +8,7 @@ import os
 import threading
 import time
 from functools import wraps
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from werkzeug.middleware.proxy_fix import ProxyFix
 from ..utils.logger import setup_logger
 from ..utils.rate_limiter import RateLimiter, MessageLoopDetector, GlobalRateLimiter
@@ -17,6 +17,7 @@ from ..providers import get_provider
 from .message_processor import MessageProcessor
 from .message_sender import MessageSender
 from .feedback_manager import feedback_manager
+from .stripe_manager import StripeManager
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -292,6 +293,67 @@ def cron_send_feedback():
         'pending': pending,
         'errors': errors,
     }), 200
+
+
+@app.route('/internal/stripe/webhook', methods=['POST'])
+def stripe_webhook():
+    """
+    Stripe webhook endpoint.
+    Auth is via Stripe-Signature header (STRIPE_WEBHOOK_SECRET).
+    Raw bytes required for signature verification — do NOT parse JSON first.
+    """
+    payload = request.get_data()  # raw bytes — critical for sig verification
+    sig_header = request.headers.get('Stripe-Signature', '')
+
+    if not sig_header:
+        logger.warning("Stripe webhook received without Stripe-Signature header")
+        return jsonify({'status': 'error', 'message': 'Missing signature'}), 400
+
+    try:
+        stripe_mgr = StripeManager()
+    except RuntimeError as e:
+        logger.error(f"Stripe not configured: {e}")
+        return jsonify({'status': 'error', 'message': 'Stripe not configured'}), 500
+
+    success, message = stripe_mgr.handle_webhook_event(payload, sig_header)
+
+    if not success:
+        if message == 'invalid_signature':
+            return jsonify({'status': 'error', 'message': 'Invalid signature'}), 400
+        logger.error(f"Stripe webhook error: {message}")
+        return jsonify({'status': 'error', 'message': message}), 400
+
+    return jsonify({'status': 'ok'}), 200
+
+
+@app.route('/payment/success', methods=['GET'])
+def payment_success():
+    """Stripe redirects here after successful checkout."""
+    html = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Pago completado</title>"
+        "<style>body{font-family:sans-serif;text-align:center;padding:60px 20px;color:#1a1a2e;}"
+        "h1{font-size:2.5em;margin-bottom:10px;} p{font-size:1.1em;color:#555;}</style></head>"
+        "<body><h1>✅ Pago completado</h1>"
+        "<p>Tu plan ha sido activado. Vuelve a WhatsApp para continuar.</p></body></html>"
+    )
+    return make_response(html, 200)
+
+
+@app.route('/payment/cancel', methods=['GET'])
+def payment_cancel():
+    """Stripe redirects here if user cancels checkout."""
+    html = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Pago cancelado</title>"
+        "<style>body{font-family:sans-serif;text-align:center;padding:60px 20px;color:#1a1a2e;}"
+        "h1{font-size:2.5em;margin-bottom:10px;} p{font-size:1.1em;color:#555;}</style></head>"
+        "<body><h1>❌ Pago cancelado</h1>"
+        "<p>No se ha realizado ningún cargo. Vuelve a WhatsApp cuando quieras.</p></body></html>"
+    )
+    return make_response(html, 200)
 
 
 def run_server(host='0.0.0.0', port=5000, debug=False):

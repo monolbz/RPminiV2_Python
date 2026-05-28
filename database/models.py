@@ -80,6 +80,14 @@ class User(Base):
     routes_used_today = Column(Integer, nullable=False, default=0)
     routes_reset_date = Column(Date)  # UTC date of last daily counter reset
 
+    # Stripe payment fields
+    stripe_customer_id = Column(String(30))       # cus_XXXX
+    stripe_subscription_id = Column(String(30))   # sub_XXXX (premium/plus only)
+    stripe_price_id = Column(String(30))          # price_XXXX of active plan
+    pending_tier = Column(String(20))             # tier awaiting checkout completion
+    checkout_created_at = Column(DateTime(timezone=True))  # when checkout session was issued
+    ppu_credits = Column(Integer, nullable=False, default=0)  # pre-paid route credits
+
     # Relationships
     consents = relationship("Consent", back_populates="user", cascade="all")
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
@@ -125,6 +133,13 @@ class User(Base):
         self.phone_number = placeholder
         self.display_name = None
         self.deleted_at = datetime.now()
+        # Clear Stripe fields (caller must cancel subscription/delete customer first)
+        self.stripe_customer_id = None
+        self.stripe_subscription_id = None
+        self.stripe_price_id = None
+        self.pending_tier = None
+        self.checkout_created_at = None
+        self.ppu_credits = 0
 
 
 class Consent(Base):
@@ -306,7 +321,10 @@ class AuditLog(Base):
         CheckConstraint(
             "action IN ('user_created', 'consent_given', 'consent_revoked', "
             "'data_accessed', 'data_exported', 'data_deleted', "
-            "'session_started', 'route_requested')",
+            "'session_started', 'route_requested', 'route_blocked', "
+            "'tier_assigned', "
+            "'payment_initiated', 'payment_completed', 'tier_upgraded', "
+            "'tier_expired', 'subscription_cancelled', 'ppu_usage_reported')",
             name='valid_action'
         ),
         Index('idx_audit_logs_user', 'user_id'),

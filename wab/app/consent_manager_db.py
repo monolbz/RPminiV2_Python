@@ -291,6 +291,32 @@ class ConsentManager:
                     logger.warning(f"Cannot anonymize: no user found for {phone_number}")
                     return False
 
+                # GDPR erasure: cancel Stripe subscription and delete customer
+                # before anonymizing (phone_number still available here)
+                stripe_sub_id = user.stripe_subscription_id
+                stripe_customer_id = user.stripe_customer_id
+
+                if stripe_sub_id:
+                    try:
+                        import stripe
+                        from ..config.config import Config
+                        stripe.api_key = Config().STRIPE_SECRET_KEY
+                        stripe.Subscription.cancel(stripe_sub_id)
+                        logger.info(f"Stripe subscription {stripe_sub_id} cancelled for GDPR erasure")
+                    except Exception as e:
+                        logger.error(f"Failed to cancel Stripe subscription {stripe_sub_id}: {e}")
+
+                if stripe_customer_id:
+                    try:
+                        import stripe
+                        from ..config.config import Config
+                        stripe.api_key = Config().STRIPE_SECRET_KEY
+                        stripe.Customer.delete(stripe_customer_id)
+                        logger.info(f"Stripe customer {stripe_customer_id} deleted for GDPR erasure")
+                    except Exception as e:
+                        logger.error(f"Failed to delete Stripe customer {stripe_customer_id}: {e}")
+
+                # anonymize() NULLs PII + all Stripe fields and sets deleted_at
                 user.anonymize()
 
                 # Audit trail logged by user_id (phone_number is being overwritten)
@@ -298,7 +324,14 @@ class ConsentManager:
                     user_id=user.user_id,
                     action='data_deleted',
                     actor='user',
-                    details={'gdpr_article': 'Art17', 'fields_cleared': ['phone_number', 'display_name']}
+                    details={
+                        'gdpr_article': 'Art17',
+                        'fields_cleared': [
+                            'phone_number', 'display_name',
+                            'stripe_customer_id', 'stripe_subscription_id',
+                            'stripe_price_id', 'pending_tier', 'checkout_created_at'
+                        ]
+                    }
                 )
                 session.add(audit)
 

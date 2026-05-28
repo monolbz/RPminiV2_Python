@@ -127,6 +127,10 @@ class MessageProcessor:
                 '/exportdata', 'exportdata', '/exportar', 'exportar',
                 '/deletedata', 'deletedata', '/borrar', 'borrar', '/eliminar', 'eliminar',
                 '/revokeconsent', 'revokeconsent', '/revocar', 'revocar',
+                '/pagos', 'pagos', '/pago', 'pago',
+                '/precios', 'precios',
+                'premium', 'plus',
+                'cancelar suscripción', 'cancelar suscripcion',
             }
             if message_lower not in _gdpr_commands:
                 survey_reply = feedback_manager.handle_incoming(
@@ -146,6 +150,23 @@ class MessageProcessor:
             # Command: /about or /info
             if message_lower in ['/about', '/info', 'about', 'info']:
                 return self._handle_about_command(from_number, phone_number_id, display_name)
+
+            # Command: /precios (show plan descriptions)
+            if message_lower in ['/precios', 'precios']:
+                return self._handle_precios_command(from_number, phone_number_id)
+
+            # Command: /pagos (show plan + payment options)
+            if message_lower in ['/pagos', 'pagos', '/pago', 'pago']:
+                return self._handle_pagos_command(from_number, phone_number_id, display_name)
+
+            # Commands: premium / plus (return single checkout link)
+            if message_lower in ['premium', 'plus']:
+                return self._handle_plan_link_command(from_number, phone_number_id, message_lower)
+
+            # Command: cancelar suscripción
+            if message_lower in ['cancelar suscripción', 'cancelar suscripcion',
+                                  '/cancelar suscripción', '/cancelar suscripcion']:
+                return self._handle_cancel_subscription_command(from_number, phone_number_id, display_name)
 
             # GDPR COMMANDS
             # Command: /privacy (show privacy policy)
@@ -419,6 +440,258 @@ class MessageProcessor:
         )
         return self._create_response(from_number, phone_number_id, reply_text)
 
+    def _handle_precios_command(self, from_number, phone_number_id):
+        """Handle /precios command — static description of all plans."""
+        reply_text = (
+            "💳 *Mi Ruta Pro — Precios*\n\n"
+            "📦 *Pago por uso* — €1,99 por ruta\n"
+            "Sin suscripción. Pagas solo cuando necesites optimizar.\n"
+            "Sin fecha de caducidad.\n\n"
+            "⭐ *Premium* — €29,99/mes\n"
+            "Hasta 2 rutas optimizadas al día.\n"
+            "Ideal para uso regular. ¡Ahorra hasta un 60% al mes!\n\n"
+            "🚀 *Plus* — €49,99/mes\n"
+            "Hasta 4 rutas optimizadas al día.\n"
+            "Perfecto para uso profesional. ¡Ahorra hasta 180€ al mes!\n\n"
+            "Escribe *pagos* para contratar un plan."
+        )
+        return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _handle_pagos_command(self, from_number, phone_number_id, display_name):
+        """Handle /pagos command — show current plan + payment options."""
+        if not consent_manager.has_consent(from_number):
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        from database.db_manager import get_db_manager
+        from database.models import User
+        from .stripe_manager import StripeManager, TIER_DISPLAY
+
+        db = get_db_manager()
+        try:
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=from_number, deleted_at=None
+                ).first()
+
+                if not user:
+                    return self._create_response(from_number, phone_number_id,
+                                                 "❌ No encontré tu cuenta. Intenta de nuevo.")
+
+                tier = user.tier
+                tier_expires_at = user.tier_expires_at
+                routes_today = user.routes_used_today or 0
+                routes_lifetime = user.routes_used_lifetime or 0
+                ppu_credits = user.ppu_credits or 0
+
+        except Exception as e:
+            logger.error(f"_handle_pagos_command DB error for {from_number}: {e}", exc_info=True)
+            return self._create_response(from_number, phone_number_id,
+                                         "❌ No pude acceder a tu cuenta. Intenta de nuevo.")
+
+        # Build current plan section
+        TIER_LIMITS = {'btester': '3/día', 'free': '3 totales', 'ppu': 'pago por uso',
+                       'premium': '2/día', 'plus': '4/día'}
+        plan_section = ""
+        if tier == 'ppu':
+            plan_section = (
+                f"💳 *Mi Ruta Pro — Tu plan*\n\n"
+                f"📦 *Plan:* Pago por uso\n"
+                f"🎫 *Créditos disponibles:* {ppu_credits}\n"
+                f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
+                f"{'─' * 20}\n"
+                f"💡 *Recargar créditos:*\n\n"
+            )
+        elif tier in {'premium', 'plus'}:
+            display_name_tier, price, _ = TIER_DISPLAY.get(tier, (tier, '', ''))
+            if tier_expires_at:
+                valid_until = tier_expires_at.strftime("%d %b %Y")
+                validity_line = f"📅 *Válido hasta:* {valid_until}\n"
+            else:
+                validity_line = "📅 *Validez:* 3 meses desde la compra\n"
+            plan_section = (
+                f"💳 *Mi Ruta Pro — Tu plan actual*\n\n"
+                f"📦 *Plan:* {display_name_tier}\n"
+                f"{validity_line}"
+                f"🗺️ *Rutas hoy:* {routes_today}\n"
+                f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
+                f"{'─' * 20}\n"
+                f"💡 *Cambiar plan:*\n\n"
+            )
+        else:
+            plan_section = (
+                f"💳 *Mi Ruta Pro — Planes disponibles*\n\n"
+                f"📦 *Plan actual:* {tier} ({TIER_LIMITS.get(tier, '')})\n"
+                f"🔄 *Rutas totales:* {routes_lifetime}\n\n"
+                f"{'─' * 20}\n"
+                f"💡 *Elige un plan para continuar:*\n\n"
+            )
+
+        # Always show only 1 URL (PPU) to stay under Twilio's 1600-char limit.
+        # Premium/Plus are shown as text only; user replies with plan name to get link.
+        try:
+            stripe_mgr = StripeManager()
+            ppu_link = stripe_mgr.get_checkout_link_message(from_number, 'ppu')
+        except Exception as e:
+            logger.error(f"_handle_pagos_command: Stripe unavailable for {from_number}: {e}", exc_info=True)
+            ppu_link = ""
+
+        if ppu_link:
+            if tier == 'ppu':
+                # PPU user: top-up + option to switch to subscription
+                reply_text = (
+                    f"{plan_section}"
+                    f"{ppu_link}\n\n"
+                    "💡 *O suscríbete a un plan:*\n\n"
+                    "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                    "Responde *premium* para obtener el enlace de pago.\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€/mes!\n"
+                    "Responde *plus* para obtener el enlace de pago.\n\n"
+                    "_Pago seguro con Stripe 🔒_"
+                )
+            else:
+                # Free/expired/btester: show all plans, PPU with link, others as text
+                reply_text = (
+                    f"{plan_section}"
+                    f"{ppu_link}\n\n"
+                    "⭐ *Premium* — €29,99/mes (2 rutas/día) ¡Ahorra hasta un 60%!\n"
+                    "Responde *premium* para obtener el enlace de pago.\n\n"
+                    "🚀 *Plus* — €49,99/mes (4 rutas/día) ¡Ahorra hasta 180€/mes!\n"
+                    "Responde *plus* para obtener el enlace de pago.\n\n"
+                    "_Precios con IVA. Pago seguro con Stripe 🔒_"
+                )
+        else:
+            reply_text = (
+                f"{plan_section}"
+                "💳 Los pagos estarán disponibles muy pronto."
+            )
+
+        return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _log_command(self, phone_number: str, command: str) -> None:
+        """Log a legally significant inbound command to AuditLog."""
+        try:
+            from database.db_manager import get_db_manager
+            from database.models import User, AuditLog
+            db = get_db_manager()
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=phone_number, deleted_at=None
+                ).first()
+                if user:
+                    audit = AuditLog.log_action(
+                        user_id=user.user_id,
+                        action='command_received',
+                        actor='user',
+                        details={'command': command}
+                    )
+                    session.add(audit)
+        except Exception as e:
+            logger.error(f"_log_command failed for {phone_number} command={command}: {e}")
+
+    def _handle_plan_link_command(self, from_number, phone_number_id, tier: str):
+        """Return a single checkout link for 'premium' or 'plus' plan."""
+        if not consent_manager.has_consent(from_number):
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        self._log_command(from_number, tier)
+        from .stripe_manager import StripeManager, TIER_DISPLAY
+        from database.db_manager import get_db_manager
+        from database.models import User
+
+        # Single DB lookup: used for same-plan block and plan-change disclaimer
+        user_tier = None
+        user_sub_id = None
+        user_expires_at = None
+        try:
+            db = get_db_manager()
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=from_number, deleted_at=None
+                ).first()
+                if user:
+                    user_tier = user.tier
+                    user_sub_id = user.stripe_subscription_id
+                    user_expires_at = user.tier_expires_at
+        except Exception:
+            pass
+
+        # Block same-plan repurchase
+        if user_tier == tier and user_sub_id:
+            display_name = TIER_DISPLAY.get(tier, (tier,))[0]
+            expires_str = (
+                user_expires_at.strftime("%d/%m/%Y")
+                if user_expires_at else "fecha no disponible"
+            )
+            other_plan = "plus" if tier == "premium" else None
+            upsell = (
+                f"Si quieres más rutas al día responde *{other_plan}* para cambiar de plan."
+                if other_plan else
+                ""
+            )
+            return self._create_response(
+                from_number, phone_number_id,
+                f"✅ *Ya tienes el plan {display_name} activo hasta el {expires_str}.*\n\n"
+                f"Tu suscripción se renueva automáticamente.{' ' + upsell if upsell else ''}"
+            )
+
+        try:
+            link = StripeManager().get_checkout_link_message(from_number, tier)
+        except Exception as e:
+            logger.error(f"_handle_plan_link_command: Stripe error for {from_number} tier={tier}: {e}")
+            link = ""
+
+        if link:
+            changing_plan = user_sub_id and user_tier in ('premium', 'plus')
+            disclaimer = (
+                "_Precio con IVA incluido. Pago seguro con Stripe 🔒_\n\n"
+                "⚠️ _El nuevo plan se factura completo desde hoy. Al cambiar de plan, los días restantes de tu plan actual "
+                "no se reembolsan automáticamente. Para solicitar un reembolso proporcional contacta con support@mirutapro.es_"
+                if changing_plan else
+                "_Precio con IVA incluido. Pago seguro con Stripe 🔒_"
+            )
+            reply_text = f"{link}\n\n{disclaimer}"
+        else:
+            reply_text = "❌ No pude generar el enlace de pago. Intenta de nuevo en unos segundos."
+
+        return self._create_response(from_number, phone_number_id, reply_text)
+
+    def _handle_cancel_subscription_command(self, from_number, phone_number_id, display_name):
+        """Handle 'cancelar suscripción' — cancel Stripe subscription immediately."""
+        if not consent_manager.has_consent(from_number):
+            return self._create_response(from_number, phone_number_id, CONSENT_REQUEST)
+
+        self._log_command(from_number, 'cancelar suscripción')
+        from database.db_manager import get_db_manager
+        from database.models import User
+        import stripe
+
+        db = get_db_manager()
+        try:
+            with db.get_session() as session:
+                user = session.query(User).filter_by(
+                    phone_number=from_number, deleted_at=None
+                ).first()
+                if not user or not user.stripe_subscription_id:
+                    return self._create_response(
+                        from_number, phone_number_id,
+                        "ℹ️ No tienes una suscripción activa para cancelar.\n\n"
+                        "Escribe *pagos* para ver los planes disponibles."
+                    )
+                sub_id = user.stripe_subscription_id
+
+            stripe.api_key = config.STRIPE_SECRET_KEY
+            stripe.Subscription.cancel(sub_id)
+            # No reply here — the customer.subscription.deleted webhook fires within
+            # seconds and sends the accurate confirmation message.
+            return None
+
+        except Exception as e:
+            logger.error(f"Cancel subscription error for {from_number}: {e}", exc_info=True)
+            return self._create_response(
+                from_number, phone_number_id,
+                "❌ No pude cancelar tu suscripción. Por favor, inténtalo de nuevo más tarde."
+            )
+
     def _handle_privacy_command(self, from_number, phone_number_id, display_name):
         """Handle /privacy command - show privacy policy."""
         logger.info(f"User {from_number} requested privacy policy")
@@ -510,6 +783,7 @@ class MessageProcessor:
     def _handle_deletedata_command(self, from_number, phone_number_id, display_name):
         """Handle /deletedata command - GDPR Article 17 (Right to erasure)."""
         logger.info(f"User {from_number} requested data deletion")
+        self._log_command(from_number, 'deletedata')
 
         consent_data = consent_manager.export_user_consent_data(from_number)
 
@@ -549,6 +823,7 @@ class MessageProcessor:
     def _handle_revokeconsent_command(self, from_number, phone_number_id, display_name):
         """Handle /revokeconsent command - GDPR Article 7.3 (Withdraw consent)."""
         logger.info(f"User {from_number} requested consent revocation")
+        self._log_command(from_number, 'revokeconsent')
 
         if not consent_manager.has_consent(from_number):
             reply_text = (
