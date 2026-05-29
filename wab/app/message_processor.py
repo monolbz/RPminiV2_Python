@@ -14,6 +14,7 @@ from .consent_manager_db import ConsentManager
 from . import usage_manager
 from .feedback_manager import feedback_manager
 from ..config.config import Config
+from ..config.constants import SUPPORT_EMAIL, HOME_URL
 from ..integration.route_optimizer_bridge import route_bridge
 from ..templates import (
     CONSENT_REQUEST,
@@ -435,8 +436,9 @@ class MessageProcessor:
             "2. Calcula la ruta más eficiente\n"
             "3. ¡Ahorras tiempo y combustible! 🚗💨\n\n"
             "*¿Necesitas ayuda?*\n"
-            "Envía /ayuda para instrucciones\n\n"
-            "Versión: 3.0.0"
+            f"Envía /ayuda para instrucciones\n\n"
+            f"Visítanos en: {HOME_URL}\n"
+            f"Contacta con soporte en: {SUPPORT_EMAIL}"
         )
         return self._create_response(from_number, phone_number_id, reply_text)
 
@@ -645,7 +647,7 @@ class MessageProcessor:
             disclaimer = (
                 "_Precio con IVA incluido. Pago seguro con Stripe 🔒_\n\n"
                 "⚠️ _El nuevo plan se factura completo desde hoy. Al cambiar de plan, los días restantes de tu plan actual "
-                "no se reembolsan automáticamente. Para solicitar un reembolso proporcional contacta con support@mirutapro.es_"
+                f"no se reembolsan automáticamente. Para solicitar un reembolso proporcional contacta con {SUPPORT_EMAIL}_"
                 if changing_plan else
                 "_Precio con IVA incluido. Pago seguro con Stripe 🔒_"
             )
@@ -737,8 +739,8 @@ class MessageProcessor:
                 f"*Direcciones guardadas:* Ninguna (se borran automáticamente después de 24h)\n\n"
                 f"💡 *Comandos disponibles:*\n"
                 f"/exportdata - Exportar tus datos\n"
-                f"/deletedata - Eliminar todos tus datos\n"
-                f"/revokeconsent - Retirar consentimiento"
+                f"/eliminar - Eliminar todos tus datos\n"
+                f"/revocar - Retirar consentimiento"
             )
 
         return self._create_response(from_number, phone_number_id, reply_text)
@@ -816,7 +818,7 @@ class MessageProcessor:
                 )
                 logger.info(f"GDPR Art. 17 erasure completed for {from_number}")
             else:
-                reply_text = "❌ Error al procesar tu solicitud. Por favor, intenta de nuevo o contacta con soporte en support@monowai.es"
+                reply_text = f"❌ Error al procesar tu solicitud. Por favor, intenta de nuevo o contacta con soporte en {SUPPORT_EMAIL}"
 
         return self._create_response(from_number, phone_number_id, reply_text)
 
@@ -932,7 +934,7 @@ class MessageProcessor:
             return self._create_response(
                 from_number,
                 phone_number_id,
-                "❌ Error al procesar tu consentimiento. Por favor, contacta con soporte en support@monowai.es"
+                f"❌ Error al procesar tu consentimiento. Por favor, contacta con soporte en {SUPPORT_EMAIL}"
             )
 
     def _create_response(self, to_number, phone_number_id, message_text):

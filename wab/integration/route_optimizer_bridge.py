@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from route_optimizer.api import optimize_route
 from route_optimizer.utils import format_duration, calculate_fuel_cost, generate_google_maps_url, FUEL_CONSUMPTION_L_PER_100KM
 from ..utils.logger import setup_logger
+from ..config.constants import SUPPORT_EMAIL
 
 logger = setup_logger(__name__)
 
@@ -292,7 +293,7 @@ class RouteOptimizerBridge:
         """
         # Clean up technical error messages
         if "GOOGLE_MAPS_API_KEY not found" in error_msg:
-            return "Error de configuración del servicio. Por favor, contacta con soporte en support@monowai.es"
+            return f"Error de configuración del servicio. Por favor, contacta con soporte en {SUPPORT_EMAIL}"
 
         if "Google Maps API error" in error_msg:
             if "ZERO_RESULTS" in error_msg:

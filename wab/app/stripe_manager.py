@@ -21,6 +21,7 @@ from typing import Optional, Tuple
 from database.db_manager import get_db_manager
 from database.models import User, AuditLog
 from ..config.config import Config
+from ..config.constants import SUPPORT_EMAIL
 from ..utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -584,7 +585,7 @@ class StripeManager:
             from .message_sender import MessageSender
             msg = (
                 "⚠️ *Tu acceso ha sido suspendido temporalmente.*\n\n"
-                "Contacta con nosotros en support@mirutapro.es para más información."
+                f"Contacta con nosotros en {SUPPORT_EMAIL} para más información."
             )
             MessageSender().provider.send(phone_number, msg)
         except Exception as e:
