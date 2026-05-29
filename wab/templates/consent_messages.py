@@ -41,13 +41,13 @@ Para poder ayudarte a optimizar tus rutas, necesito tu *consentimiento* para pro
 • Registro de consentimiento: 3 años (obligación legal)
 
 ✅ *Tus derechos:*
-• Acceso: Ver qué datos tenemos (/mydata)
+• Acceso: Ver qué datos tenemos (/misdatos)
 • Rectificación: Corregir datos incorrectos
-• Supresión: Borrar todos tus datos (/deletedata)
+• Supresión: Borrar todos tus datos (/eliminar)
 • Portabilidad: Exportar tus datos (/exportdata)
-• Revocación: Retirar tu consentimiento (/revokeconsent)
+• Revocación: Retirar tu consentimiento (/revocar)
 
-📄 Lee nuestra política de privacidad completa: /privacy
+📄 Lee nuestra política de privacidad completa: /privacidad
 
 *¿Das tu consentimiento?*
 
@@ -55,7 +55,7 @@ Responde:
 ✅ *"Acepto"* para dar tu consentimiento
 ❌ *"No acepto"* para rechazar
 
-Puedes retirar tu consentimiento en cualquier momento escribiendo /revokeconsent"""
+Puedes retirar tu consentimiento en cualquier momento escribiendo /revocar"""
 
 
 # =============================================================================
@@ -128,9 +128,9 @@ Envíame tus direcciones, una por línea.
 
 💡 *Comandos útiles:*
 /ayuda - Ver instrucciones
-/mydata - Ver tus datos
-/privacy - Ver política de privacidad
-/revokeconsent - Retirar consentimiento"""
+/misdatos - Ver tus datos
+/privacidad - Ver política de privacidad
+/revocar - Retirar consentimiento"""
 
 
 # =============================================================================

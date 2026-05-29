@@ -7,16 +7,18 @@ This is a condensed version that fits in WhatsApp messages.
 For the full legal text, see: docs/PRIVACY_POLICY.md
 """
 
+from ..config.constants import SUPPORT_EMAIL, PRIVACY_EMAIL, PRIVACY_POLICY_URL
+
 # =============================================================================
 # SHORT PRIVACY POLICY (For /privacy command)
 # =============================================================================
 
-PRIVACY_POLICY_SHORT = """📋 *POLÍTICA DE PRIVACIDAD*
+PRIVACY_POLICY_SHORT = f"""📋 *POLÍTICA DE PRIVACIDAD*
 _Versión 1.0 - 28 de octubre de 2025_
 
 *Responsable del Tratamiento:*
 Jorge Blanco / Monowai.es
-Email: privacy@monowai.es
+Email: {PRIVACY_EMAIL}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -51,15 +53,15 @@ Email: privacy@monowai.es
 *✅ TUS DERECHOS (RGPD):*
 
 1️⃣ *Acceso:* Ver qué datos tenemos
-   → Comando: `/mydata`
+   → Comando: `/misdatos`
 2️⃣ *Rectificación:* Corregir datos incorrectos
    → Envía las direcciones correctas
 3️⃣ *Supresión:* Eliminar tus datos
-   → Comando: `/deletedata`
+   → Comando: `/eliminar`
 4️⃣ *Portabilidad:* Exportar tus datos
    → Comando: `/exportdata`
 5️⃣ *Oposición/Revocación:* Retirar consentimiento
-   → Comando: `/revokeconsent`
+   → Comando: `/revocar`
 6️⃣ *Reclamación:* Ante la autoridad de control
    → AEPD: https://www.aepd.es | 901 100 099
 
@@ -77,17 +79,17 @@ Email: privacy@monowai.es
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 *📞 CONTACTO:*
-Email: privacy@monowai.es
+Email: {PRIVACY_EMAIL}
 
 *📄 Política completa:*
-https://mirutapro.monowai.es/política-de-privacidad
+{PRIVACY_POLICY_URL}
 
 o solicítala por email
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 *⚠️ IMPORTANTE:*
-• Puedes retirar tu consentimiento en cualquier momento: `/revokeconsent`
+• Puedes retirar tu consentimiento en cualquier momento: `/revocar`
 • Eliminamos tus direcciones automáticamente tras 24h
 • No compartimos tus datos con terceros (salvo Google/WhatsApp para el servicio)
 • Tienes derecho a reclamar ante la AEPD
@@ -99,28 +101,28 @@ Para más detalles, solicita la política completa por email."""
 # PRIVACY POLICY SUMMARY (Ultra-short version)
 # =============================================================================
 
-PRIVACY_SUMMARY = """🔒 *Resumen de Privacidad*
+PRIVACY_SUMMARY = f"""🔒 *Resumen de Privacidad*
 
 *Datos:* Teléfono + direcciones + fechas
 *Uso:* Optimizar rutas
 *Conservación:* 24 horas (direcciones)
-*Terceros:* Solo Google Maps y WhatsApp
+*Terceros:* Google, Meta, Twilio, Railway, Stripe
 *Tus derechos:* Acceso, supresión, portabilidad
 
 Comandos:
-• `/mydata` - Ver tus datos
-• `/deletedata` - Eliminar datos
-• `/revokeconsent` - Retirar consentimiento
-• `/privacy` - Política completa
+• `/misdatos` - Ver tus datos
+• `/eliminar` - Eliminar datos
+• `/revocar` - Retirar consentimiento
+• `/privacidad` - Resumen política de privacidad
 
-Más info: privacy@monowai.es"""
+Para ver la política completa, visita: {PRIVACY_POLICY_URL}"""
 
 
 # =============================================================================
 # PRIVACY POLICY - KEY POINTS (for consent flow)
 # =============================================================================
 
-PRIVACY_KEY_POINTS = """📋 *Puntos Clave de Privacidad*
+PRIVACY_KEY_POINTS = f"""📋 *Puntos Clave de Privacidad*
 
 ✅ *Qué procesamos:*
    • Direcciones que envías
@@ -146,7 +148,7 @@ PRIVACY_KEY_POINTS = """📋 *Puntos Clave de Privacidad*
    • Eliminación automática
    • Cumplimiento RGPD
 
-*¿Dudas?* Escribe /privacy o contacta: privacy@monowai.es"""
+*¿Dudas?* Escribe /privacy o contacta: {PRIVACY_EMAIL}"""
 
 
 # =============================================================================
