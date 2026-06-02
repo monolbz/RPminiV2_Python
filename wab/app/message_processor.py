@@ -65,7 +65,8 @@ class MessageProcessor:
             logger.info(f"Processing {message_type} message from {display_name} ({from_number})")
 
             # Update conversation tracker - user has messaged us
-            conversation_tracker.update_conversation(from_number)
+            bsuid = message.get('bsuid')
+            conversation_tracker.update_conversation(from_number, bsuid=bsuid)
 
             # Check if message type is supported
             if message_type not in self.supported_message_types:

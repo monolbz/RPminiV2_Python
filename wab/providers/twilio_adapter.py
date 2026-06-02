@@ -118,6 +118,16 @@ class TwilioAdapter:
         # Normalise: 'whatsapp:+34644252886' → '+34644252886'
         from_number = raw_from.replace('whatsapp:', '')
 
+        # WhatsApp username support (June 2026+)
+        # ExternalUserId carries the BSUID when the sender has adopted a username.
+        bsuid = form.get('ExternalUserId') or None
+
+        if not from_number.lstrip('+').isdigit():
+            logger.warning(
+                f"[Twilio] From field is not a phone number: '{from_number}'. "
+                f"Contact book may not have resolved this user. ExternalUserId: {bsuid}"
+            )
+
         # Build a Meta-compatible message dict.
         # NumMedia > 0 means the user sent an image/document — map to 'image' type
         # so message_processor.py returns the correct "not supported" placeholder.
@@ -128,7 +138,8 @@ class TwilioAdapter:
             'from': from_number,
             'timestamp': str(int(time.time())),
             'type': msg_type,
-            'text': {'body': form.get('Body', '')}
+            'text': {'body': form.get('Body', '')},
+            'bsuid': bsuid,
         }
 
         # Build a Meta-compatible value dict (metadata + contacts)

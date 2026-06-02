@@ -61,13 +61,14 @@ class ConversationTracker:
             logger.error(f"Failed to initialize database: {e}", exc_info=True)
             raise
 
-    def update_conversation(self, phone_number: str):
+    def update_conversation(self, phone_number: str, bsuid: str = None):
         """
         Update conversation timestamp for a phone number.
         Call this when receiving a message from the user.
 
         Args:
             phone_number: User's phone number
+            bsuid: WhatsApp Business-Scoped User ID (present when user has a username)
         """
         try:
             with self.db.get_session() as session_db:
@@ -79,6 +80,8 @@ class ConversationTracker:
                 if not user:
                     # Create user if doesn't exist
                     user = User(phone_number=phone_number)
+                    if bsuid:
+                        user.bsuid = bsuid
                     session_db.add(user)
                     session_db.flush()
 
@@ -86,6 +89,8 @@ class ConversationTracker:
                     usage_manager.assign_default_tier(user, session_db)
 
                     logger.info(f"Created new user: {phone_number}")
+                elif bsuid and user.bsuid != bsuid:
+                    user.bsuid = bsuid   # backfill on first username interaction
 
                 # Get or create session
                 conv_session = session_db.query(Session).filter_by(

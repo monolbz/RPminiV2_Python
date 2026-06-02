@@ -87,6 +87,7 @@ class User(Base):
     pending_tier = Column(String(20))             # tier awaiting checkout completion
     checkout_created_at = Column(DateTime(timezone=True))  # when checkout session was issued
     ppu_credits = Column(Integer, nullable=False, default=0)  # pre-paid route credits
+    bsuid = Column(String(64), unique=True)                   # WhatsApp username BSUID (nullable)
 
     # Relationships
     consents = relationship("Consent", back_populates="user", cascade="all")
@@ -132,6 +133,7 @@ class User(Base):
         placeholder = str(self.user_id.int % 10**14).zfill(14)
         self.phone_number = placeholder
         self.display_name = None
+        self.bsuid = None
         self.deleted_at = datetime.now()
         # Clear Stripe fields (caller must cancel subscription/delete customer first)
         self.stripe_customer_id = None

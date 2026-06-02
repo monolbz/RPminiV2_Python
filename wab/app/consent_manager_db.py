@@ -327,7 +327,7 @@ class ConsentManager:
                     details={
                         'gdpr_article': 'Art17',
                         'fields_cleared': [
-                            'phone_number', 'display_name',
+                            'phone_number', 'display_name', 'bsuid',
                             'stripe_customer_id', 'stripe_subscription_id',
                             'stripe_price_id', 'pending_tier', 'checkout_created_at'
                         ]
