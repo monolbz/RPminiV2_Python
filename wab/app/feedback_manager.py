@@ -97,24 +97,24 @@ class FeedbackManager:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=3)
 
                 # Users who have ever had a survey (any status) — one survey per user, ever
-                active_survey_phones = (
-                    session.query(FeedbackSurvey.phone_number)
+                surveyed_user_ids = (
+                    session.query(FeedbackSurvey.user_id)
                     .subquery()
                 )
 
                 eligible = (
-                    session.query(User.phone_number)
+                    session.query(User)
                     .filter(
                         User.created_at <= cutoff,
                         User.routes_used_lifetime >= 1,
                         User.deleted_at.is_(None),
-                        User.phone_number.notin_(active_survey_phones),
+                        User.user_id.notin_(surveyed_user_ids),
                     )
                     .all()
                 )
-                phones = [row.phone_number for row in eligible]
-                logger.info(f"Feedback cron: {len(phones)} eligible users")
-                return phones
+                identifiers = [u.phone_number or u.bsuid for u in eligible]
+                logger.info(f"Feedback cron: {len(identifiers)} eligible users")
+                return identifiers
         except Exception as e:
             logger.error(f"find_eligible_users error: {e}", exc_info=True)
             return []
@@ -125,8 +125,13 @@ class FeedbackManager:
             return False
         try:
             with self.db.get_session() as session:
+                user = User.find_by_identifier(session, phone_number)
+                if not user:
+                    logger.warning(f"create_pending_survey: no user found for {phone_number}")
+                    return False
                 survey = FeedbackSurvey(
-                    phone_number=phone_number,
+                    user_id=user.user_id,
+                    phone_number=user.phone_number,   # NULL for BSUID-only users
                     status='pending',
                     current_step='q1',
                 )
@@ -359,10 +364,13 @@ class FeedbackManager:
 
     def _get_active_survey_obj(self, session, phone_number: str) -> Optional[FeedbackSurvey]:
         """Return the active FeedbackSurvey ORM object, or None."""
+        user = User.find_by_identifier(session, phone_number)
+        if not user:
+            return None
         return (
             session.query(FeedbackSurvey)
             .filter(
-                FeedbackSurvey.phone_number == phone_number,
+                FeedbackSurvey.user_id == user.user_id,
                 FeedbackSurvey.status.notin_(['completed', 'skipped']),
             )
             .first()
