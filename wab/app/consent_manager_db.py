@@ -86,9 +86,7 @@ class ConsentManager:
         try:
             with self.db.get_session() as session:
                 # Get user by phone number
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     logger.info(f"User {phone_number} not found")
@@ -139,16 +137,15 @@ class ConsentManager:
         try:
             with self.db.get_session() as session:
                 # Get or create user
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
-                    # Create new user
-                    user = User(
-                        phone_number=phone_number,
-                        language=language
-                    )
+                    # Create new user — set phone or bsuid based on identifier type
+                    stripped = phone_number.lstrip('+')
+                    if stripped.isdigit():
+                        user = User(phone_number=phone_number, language=language)
+                    else:
+                        user = User(bsuid=phone_number, language=language)
                     session.add(user)
                     session.flush()  # Get user_id
 
@@ -222,9 +219,7 @@ class ConsentManager:
         try:
             with self.db.get_session() as session:
                 # Get user
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     logger.warning(f"Cannot revoke consent: no record for {phone_number}")
@@ -283,9 +278,7 @@ class ConsentManager:
         """
         try:
             with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     logger.warning(f"Cannot anonymize: no user found for {phone_number}")
@@ -327,7 +320,7 @@ class ConsentManager:
                     details={
                         'gdpr_article': 'Art17',
                         'fields_cleared': [
-                            'phone_number', 'display_name',
+                            'phone_number', 'display_name', 'bsuid',
                             'stripe_customer_id', 'stripe_subscription_id',
                             'stripe_price_id', 'pending_tier', 'checkout_created_at'
                         ]
@@ -354,9 +347,7 @@ class ConsentManager:
         """
         try:
             with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     return None
@@ -386,9 +377,7 @@ class ConsentManager:
         """
         try:
             with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     return None
@@ -436,9 +425,7 @@ class ConsentManager:
         """
         try:
             with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     return False
@@ -564,9 +551,7 @@ class ConsentManager:
         """
         try:
             with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
 
                 if not user:
                     return None
@@ -592,7 +577,8 @@ class ConsentManager:
 
                 # Format for user-friendly export
                 export_data = {
-                    'phone_number': phone_number,
+                    'phone_number': user.phone_number,   # may be None for BSUID-only users
+                    'bsuid': user.bsuid,                 # may be None for phone-only users
                     'user_id': str(user.user_id),
                     'consent_status': status,
                     'consent_given_date': latest_consent.consent_date.isoformat(),

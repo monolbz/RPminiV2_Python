@@ -65,7 +65,7 @@ class User(Base):
     __tablename__ = 'users'
 
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    phone_number = Column(String(20), unique=True, nullable=False)
+    phone_number = Column(String(20), unique=True)   # nullable — BSUID-only users have no phone
     display_name = Column(String(100))
     language = Column(String(5), default='es')
     created_at = Column(DateTime(timezone=True), default=func.now())
@@ -87,6 +87,7 @@ class User(Base):
     pending_tier = Column(String(20))             # tier awaiting checkout completion
     checkout_created_at = Column(DateTime(timezone=True))  # when checkout session was issued
     ppu_credits = Column(Integer, nullable=False, default=0)  # pre-paid route credits
+    bsuid = Column(String(64), unique=True)                   # WhatsApp username BSUID (nullable)
 
     # Relationships
     consents = relationship("Consent", back_populates="user", cascade="all")
@@ -96,8 +97,12 @@ class User(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            "phone_number ~ '^\\+?[0-9]+$'",
+            "phone_number IS NULL OR phone_number ~ '^\\+?[0-9]+$'",
             name='phone_format'
+        ),
+        CheckConstraint(
+            "phone_number IS NOT NULL OR bsuid IS NOT NULL",
+            name='requires_identifier'
         ),
         Index('idx_users_phone', 'phone_number'),
         Index('idx_users_created', 'created_at'),
@@ -132,6 +137,7 @@ class User(Base):
         placeholder = str(self.user_id.int % 10**14).zfill(14)
         self.phone_number = placeholder
         self.display_name = None
+        self.bsuid = None
         self.deleted_at = datetime.now()
         # Clear Stripe fields (caller must cancel subscription/delete customer first)
         self.stripe_customer_id = None
@@ -140,6 +146,25 @@ class User(Base):
         self.pending_tier = None
         self.checkout_created_at = None
         self.ppu_credits = 0
+
+    @classmethod
+    def find_by_identifier(cls, session, identifier: str, include_deleted: bool = False):
+        """
+        Find a user by phone number or BSUID.
+
+        identifier is a phone ('+34612345678') or BSUID ('BR.1A2B3C...').
+        Detection: stripped of leading '+', all digits → phone; otherwise → BSUID.
+        """
+        if not identifier:
+            return None
+        q = session.query(cls)
+        if not include_deleted:
+            q = q.filter(cls.deleted_at.is_(None))
+        stripped = identifier.lstrip('+')
+        if stripped.isdigit():
+            return q.filter(cls.phone_number == identifier).first()
+        else:
+            return q.filter(cls.bsuid == identifier).first()
 
 
 class Consent(Base):
@@ -371,7 +396,8 @@ class FeedbackSurvey(Base):
     __tablename__ = 'feedback_surveys'
 
     survey_id       = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    phone_number    = Column(String(20), ForeignKey('users.phone_number', ondelete='CASCADE'), nullable=False)
+    user_id         = Column(UUID(as_uuid=True), ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    phone_number    = Column(String(20))   # nullable — NULL for BSUID-only users
     status          = Column(String(20), nullable=False, default='pending')
     current_step    = Column(String(20), nullable=False, default='q1')
     nps_score       = Column(SmallInteger)
@@ -400,10 +426,13 @@ class FeedbackSurvey(Base):
             "willing_to_pay IN ('si','no','quizas')",
             name='feedback_survey_willing'
         ),
+        Index('idx_feedback_surveys_user_id', 'user_id'),
         Index('idx_feedback_surveys_phone', 'phone_number'),
         Index('idx_feedback_surveys_status', 'status'),
         Index('idx_feedback_surveys_created', 'created_at'),
     )
+
+    user = relationship("User")
 
     def __repr__(self):
         return (

@@ -61,31 +61,39 @@ class ConversationTracker:
             logger.error(f"Failed to initialize database: {e}", exc_info=True)
             raise
 
-    def update_conversation(self, phone_number: str):
+    def update_conversation(self, phone_number: str, bsuid: str = None):
         """
         Update conversation timestamp for a phone number.
         Call this when receiving a message from the user.
 
         Args:
             phone_number: User's phone number
+            bsuid: WhatsApp Business-Scoped User ID (present when user has a username)
         """
         try:
+            identifier = phone_number   # param name kept for backward compat; may be phone or BSUID
             with self.db.get_session() as session_db:
                 # Get or create user
-                user = session_db.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session_db, identifier)
 
                 if not user:
-                    # Create user if doesn't exist
-                    user = User(phone_number=phone_number)
+                    # Create new user — set phone or bsuid based on identifier type
+                    stripped = identifier.lstrip('+')
+                    if stripped.isdigit():
+                        user = User(phone_number=identifier)
+                    else:
+                        user = User(bsuid=identifier)   # phone_number stays NULL
+                    if bsuid and user.bsuid != bsuid:
+                        user.bsuid = bsuid
                     session_db.add(user)
                     session_db.flush()
 
                     # Assign default tier at creation time
                     usage_manager.assign_default_tier(user, session_db)
 
-                    logger.info(f"Created new user: {phone_number}")
+                    logger.info(f"Created new user: {identifier}")
+                elif bsuid and user.bsuid != bsuid:
+                    user.bsuid = bsuid   # backfill on first username interaction
 
                 # Get or create session
                 conv_session = session_db.query(Session).filter_by(
@@ -130,9 +138,7 @@ class ConversationTracker:
         try:
             with self.db.get_session() as session_db:
                 # Get user
-                user = session_db.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session_db, phone_number)
 
                 if not user:
                     logger.info(f"No active session for {phone_number}")
@@ -174,9 +180,7 @@ class ConversationTracker:
         try:
             with self.db.get_session() as session_db:
                 # Get user
-                user = session_db.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session_db, phone_number)
 
                 if not user:
                     return None
@@ -274,9 +278,7 @@ class ConversationTracker:
         try:
             with self.db.get_session() as session_db:
                 # Get user
-                user = session_db.query(User).filter_by(
-                    phone_number=phone_number
-                ).first()
+                user = User.find_by_identifier(session_db, phone_number)
 
                 if not user:
                     return None

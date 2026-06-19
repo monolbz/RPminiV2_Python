@@ -65,7 +65,8 @@ class MessageProcessor:
             logger.info(f"Processing {message_type} message from {display_name} ({from_number})")
 
             # Update conversation tracker - user has messaged us
-            conversation_tracker.update_conversation(from_number)
+            bsuid = message.get('bsuid')
+            conversation_tracker.update_conversation(from_number, bsuid=bsuid)
 
             # Check if message type is supported
             if message_type not in self.supported_message_types:
@@ -471,9 +472,7 @@ class MessageProcessor:
         db = get_db_manager()
         try:
             with db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=from_number, deleted_at=None
-                ).first()
+                user = User.find_by_identifier(session, from_number)
 
                 if not user:
                     return self._create_response(from_number, phone_number_id,
@@ -576,9 +575,7 @@ class MessageProcessor:
             from database.models import User, AuditLog
             db = get_db_manager()
             with db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number, deleted_at=None
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
                 if user:
                     audit = AuditLog.log_action(
                         user_id=user.user_id,
@@ -607,9 +604,7 @@ class MessageProcessor:
         try:
             db = get_db_manager()
             with db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=from_number, deleted_at=None
-                ).first()
+                user = User.find_by_identifier(session, from_number)
                 if user:
                     user_tier = user.tier
                     user_sub_id = user.stripe_subscription_id
@@ -670,9 +665,7 @@ class MessageProcessor:
         db = get_db_manager()
         try:
             with db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=from_number, deleted_at=None
-                ).first()
+                user = User.find_by_identifier(session, from_number)
                 if not user or not user.stripe_subscription_id:
                     return self._create_response(
                         from_number, phone_number_id,
@@ -729,9 +722,15 @@ class MessageProcessor:
                 withdrawal_date = format_consent_date(consent_data.get('withdrawal_date', ''), "es")
                 status = f"🔓 Retirado el {withdrawal_date}"
 
+            stripped_id = from_number.lstrip('+')
+            id_line = (
+                f"*Número de teléfono:* {from_number}\n"
+                if stripped_id.isdigit()
+                else "*Identificador:* Usuario con nombre de usuario WhatsApp\n"
+            )
             reply_text = (
                 f"📊 *Tus Datos Personales*\n\n"
-                f"*Número de teléfono:* {from_number}\n"
+                f"{id_line}"
                 f"*Consentimiento:* {status}\n"
                 f"*Fecha de consentimiento:* {formatted_date}\n"
                 f"*Versión de consentimiento:* {consent_data.get('consent_version', 'N/A')}\n"
@@ -761,8 +760,10 @@ class MessageProcessor:
             )
         else:
             # Create export data
+            _stripped = from_number.lstrip('+')
             export_data = {
-                "phone_number": from_number,
+                "phone_number": from_number if _stripped.isdigit() else None,
+                "bsuid": from_number if not _stripped.isdigit() else None,
                 "display_name": display_name,
                 "consent_data": consent_data,
                 "export_date": datetime.now().isoformat(),

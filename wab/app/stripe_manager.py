@@ -63,9 +63,7 @@ class StripeManager:
         """
         try:
             with self.db.get_session() as session:
-                user = session.query(User).filter_by(
-                    phone_number=phone_number, deleted_at=None
-                ).first()
+                user = User.find_by_identifier(session, phone_number)
                 if not user:
                     logger.error(f"get_or_create_customer: no user for {phone_number}")
                     return None
@@ -74,7 +72,7 @@ class StripeManager:
                     return user.stripe_customer_id
 
                 customer = stripe.Customer.create(
-                    metadata={'phone_number': phone_number}
+                    metadata={'user_identifier': phone_number}
                 )
                 user.stripe_customer_id = customer.id
 
@@ -127,7 +125,7 @@ class StripeManager:
                 session = stripe.checkout.Session.create(
                     customer=customer_id,
                     client_reference_id=phone_number,
-                    metadata={'tier': tier, 'phone_number': phone_number},
+                    metadata={'tier': tier, 'user_identifier': phone_number},
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='payment',
                     locale='es',
@@ -142,7 +140,7 @@ class StripeManager:
                 session = stripe.checkout.Session.create(
                     customer=customer_id,
                     client_reference_id=phone_number,
-                    metadata={'tier': tier, 'phone_number': phone_number},
+                    metadata={'tier': tier, 'user_identifier': phone_number},
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='subscription',
                     locale='es',
@@ -152,15 +150,13 @@ class StripeManager:
                     success_url=self.config.STRIPE_SUCCESS_URL,
                     cancel_url=self.config.STRIPE_CANCEL_URL,
                     subscription_data={
-                        'metadata': {'tier': tier, 'phone_number': phone_number}
+                        'metadata': {'tier': tier, 'user_identifier': phone_number}
                     },
                 )
 
             # Record pending tier and checkout timestamp
             with self.db.get_session() as db_session:
-                user = db_session.query(User).filter_by(
-                    phone_number=phone_number, deleted_at=None
-                ).first()
+                user = User.find_by_identifier(db_session, phone_number)
                 if user:
                     user.pending_tier = tier
                     user.checkout_created_at = datetime.now(timezone.utc)
@@ -254,9 +250,7 @@ class StripeManager:
             return
 
         with self.db.get_session() as db_session:
-            user = db_session.query(User).filter_by(
-                phone_number=phone_number, deleted_at=None
-            ).first()
+            user = User.find_by_identifier(db_session, phone_number)
             if not user:
                 logger.error(f"checkout.session.completed: no user for {phone_number}")
                 return
@@ -400,7 +394,7 @@ class StripeManager:
                 details={'reason': 'payment_failed', 'invoice_id': invoice.get('id')}
             )
             db_session.add(audit)
-            phone_number = user.phone_number
+            phone_number = user.phone_number or user.bsuid
 
         logger.warning(f"invoice.payment_failed for sub {subscription_id}")
         self._send_payment_failed_warning(phone_number)
@@ -437,7 +431,7 @@ class StripeManager:
                          'ppu_credits': ppu_credits}
             )
             db_session.add(audit)
-            phone_number = user.phone_number
+            phone_number = user.phone_number or user.bsuid
 
         logger.info(f"subscription.deleted: downgraded {phone_number} from {old_tier} to ppu (credits={ppu_credits})")
         self._send_subscription_cancelled(phone_number)
@@ -532,7 +526,7 @@ class StripeManager:
                         logger.warning(f"dispute.created: no user for customer {customer_id} (dispute {dispute_id})")
                         return
 
-                    phone_number = user.phone_number
+                    phone_number = user.phone_number or user.bsuid
                     old_tier = user.tier
 
                     user.tier = 'free'

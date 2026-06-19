@@ -115,8 +115,28 @@ class TwilioAdapter:
             logger.debug(f"[Twilio] Ignoring non-WhatsApp message from: {raw_from}")
             return []
 
-        # Normalise: 'whatsapp:+34644252886' → '+34644252886'
-        from_number = raw_from.replace('whatsapp:', '')
+        # Normalise From field: 'whatsapp:+34612345678' → '+34612345678'
+        #                       'whatsapp:BR.1A2B3C...' → 'BR.1A2B3C...' (BSUID-only user)
+        raw_identifier = raw_from.replace('whatsapp:', '')
+
+        # ExternalUserId is present when the sender has a WhatsApp username (phone or BSUID-only)
+        bsuid_field = form.get('ExternalUserId') or None
+
+        # Determine phone vs BSUID-only user
+        stripped = raw_identifier.lstrip('+')
+        if stripped.isdigit():
+            from_phone = raw_identifier
+            from_bsuid = bsuid_field      # may be None (no username) or a BSUID string
+        else:
+            from_phone = None             # BSUID-only user — no phone shared
+            from_bsuid = raw_identifier   # From field itself IS the BSUID
+
+        # Unified routing identifier: phone if available, BSUID otherwise
+        identifier = from_phone if from_phone else from_bsuid
+
+        if not identifier:
+            logger.warning("[Twilio] Could not determine user identifier — message dropped")
+            return []
 
         # Build a Meta-compatible message dict.
         # NumMedia > 0 means the user sent an image/document — map to 'image' type
@@ -125,10 +145,12 @@ class TwilioAdapter:
         msg_type = 'image' if num_media > 0 else 'text'
         message = {
             'id': form.get('MessageSid', ''),
-            'from': from_number,
+            'from': identifier,       # phone OR BSUID string — unified identifier
+            'from_phone': from_phone, # None for BSUID-only users
+            'bsuid': from_bsuid,      # None when user has no username
             'timestamp': str(int(time.time())),
             'type': msg_type,
-            'text': {'body': form.get('Body', '')}
+            'text': {'body': form.get('Body', '')},
         }
 
         # Build a Meta-compatible value dict (metadata + contacts)
@@ -141,7 +163,7 @@ class TwilioAdapter:
             }]
         }
 
-        logger.info(f"[Twilio] Parsed incoming message from {from_number}")
+        logger.info(f"[Twilio] Parsed incoming message from {identifier}")
         return [(message, value)]
 
     def parse_status_updates(self, request):

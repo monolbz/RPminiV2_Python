@@ -108,7 +108,7 @@ def assign_default_tier(user: User, session) -> str:
     )
     session.add(audit)
 
-    logger.info(f"Assigned tier '{tier}' to new user {user.phone_number} "
+    logger.info(f"Assigned tier '{tier}' to new user {user.phone_number or user.bsuid} "
                 f"(expires: {expires_at.date()})")
     return tier
 
@@ -138,10 +138,7 @@ def check_route_allowed(phone_number: str) -> Tuple[bool, str]:
     try:
         db = get_db_manager()
         with db.get_session() as session:
-            user = session.query(User).filter_by(
-                phone_number=phone_number,
-                deleted_at=None
-            ).first()
+            user = User.find_by_identifier(session, phone_number)
 
             if not user:
                 logger.warning(f"check_route_allowed: no user found for {phone_number}")
@@ -210,10 +207,7 @@ def record_route_used(phone_number: str) -> None:
     try:
         db = get_db_manager()
         with db.get_session() as session:
-            user = session.query(User).filter_by(
-                phone_number=phone_number,
-                deleted_at=None
-            ).first()
+            user = User.find_by_identifier(session, phone_number)
 
             if not user:
                 logger.warning(f"record_route_used: no user found for {phone_number}")
@@ -407,4 +401,7 @@ def _error_message() -> str:
 def _is_superuser(phone_number: str) -> bool:
     """Return True if phone_number is listed in SUPERUSER_PHONES env var."""
     from ..config.config import Config
+    stripped = phone_number.lstrip('+')
+    if not stripped.isdigit():
+        return False   # BSUID-only users cannot be superusers
     return phone_number in Config().SUPERUSER_PHONES
