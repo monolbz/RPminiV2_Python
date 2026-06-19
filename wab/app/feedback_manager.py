@@ -16,6 +16,7 @@ User can type 'saltar' at any step to exit gracefully.
 """
 
 import sys
+import threading
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -126,15 +127,26 @@ class FeedbackManager:
                 session.add(survey)
                 session.commit()
 
-            from .message_sender import MessageSender
-            response = {
-                'to_number': identifier,
-                'phone_number_id': phone_number_id,
-                'message_text': MSG_Q1,
-                'timestamp': datetime.now().isoformat(),
-            }
-            MessageSender().send_reply(response)
-            logger.info(f"Survey Q1 sent after 3rd route for {identifier}")
+            # Send Q1 in a background thread with a short delay so the route
+            # result message (sent by the webhook handler after this returns)
+            # always reaches the user first.
+            def _send_q1():
+                import time
+                time.sleep(5)
+                try:
+                    from .message_sender import MessageSender
+                    response = {
+                        'to_number': identifier,
+                        'phone_number_id': phone_number_id,
+                        'message_text': MSG_Q1,
+                        'timestamp': datetime.now().isoformat(),
+                    }
+                    MessageSender().send_reply(response)
+                    logger.info(f"Survey Q1 sent after 3rd route for {identifier}")
+                except Exception as e:
+                    logger.error(f"Survey Q1 background send failed for {identifier}: {e}", exc_info=True)
+
+            threading.Thread(target=_send_q1, daemon=True).start()
             return True
         except Exception as e:
             logger.error(f"trigger_survey_after_route({identifier}) error: {e}", exc_info=True)
