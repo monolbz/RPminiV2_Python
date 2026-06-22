@@ -3,12 +3,13 @@ Utility functions for route optimizer.
 Includes calculations, formatting, and URL generation.
 """
 
+import os
 from urllib.parse import quote
 
 
 # Configuration constants
 FUEL_CONSUMPTION_L_PER_100KM = 8.5  # Typical small urban delivery truck
-FUEL_PRICE_EUR_PER_L = 1.50  # Average diesel price in Madrid
+FUEL_PRICE_EUR_PER_L = float(os.getenv('FUEL_PRICE_EUR_PER_L', '1.50'))
 
 
 def format_duration(seconds):
