@@ -327,6 +327,7 @@ class MessageProcessor:
             # Only record usage on successful optimization (never on error/bad addresses)
             if result.get('success'):
                 usage_manager.record_route_used(from_number)
+                feedback_manager.trigger_survey_after_route(from_number, phone_number_id)
 
             # Twilio: split into two messages to stay within the 1600-char outgoing limit.
             # Summary (addresses + savings) first, Google Maps URL second.

@@ -3,20 +3,22 @@
 """
 Feedback Manager — WhatsApp NPS survey system.
 
-Surveys are triggered on day 3 of use (users with created_at <= now()-3d
-and routes_used_lifetime >= 1 who have not yet received a survey).
+Surveys are triggered immediately after the user's 3rd successful route
+optimization (all tiers). Q1 is sent as a follow-up message in the same
+conversation window, so no 24h-window issues arise.
 
 Survey flow (3 questions, all in Spanish):
   Q1: NPS score 1–10
   Q2: Open free-text feedback
-  Q3: Willingness to pay (si [precio] / no / quizas)
+  Q3: Discovery source (numbered 1–6)
 
 User can type 'saltar' at any step to exit gracefully.
 """
 
 import sys
+import threading
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -32,8 +34,8 @@ logger = setup_logger(__name__)
 # ---------------------------------------------------------------------------
 
 MSG_Q1 = (
-    "¡Hola! Llevas unos días usando *Mi Ruta Pro* y nos encantaría saber tu opinión.\n"
-    "Son solo 3 preguntas rápidas.\n\n"
+    "¡Hola! Acabas de completar tu 3ª ruta con *Mi Ruta Pro* 🎉\n"
+    "Nos encantaría saber qué te parece. Son solo 3 preguntas rápidas.\n\n"
     "*Pregunta 1:* Del 1 al 10, ¿qué nota le darías a Mi Ruta Pro?\n\n"
     "_Responde con un número del 1 al 10, o escribe *saltar* para omitir la encuesta._"
 )
@@ -45,9 +47,13 @@ MSG_Q2 = (
 )
 
 MSG_Q3 = (
-    "*Pregunta 3:* ¿Cuánto pagarías por Mi Ruta Pro? "
-    "Puedes indicar precio por uso o mensual.\n\n"
-    "Ejemplos: _3€ por ruta_, _50€ por mes_, _no_, _quizas_\n\n"
+    "*Pregunta 3:* ¿Cómo conociste Mi Ruta Pro? Responde con el número:\n\n"
+    "1 — Me lo recomendó alguien\n"
+    "2 — Búsqueda en Google / web\n"
+    "3 — Instagram\n"
+    "4 — Grupo de WhatsApp o Facebook\n"
+    "5 — YouTube\n"
+    "6 — Cartel, flyer o anuncio\n\n"
     "_O escribe *saltar* para terminar aquí._"
 )
 
@@ -66,6 +72,15 @@ MSG_INVALID_NPS = (
     "_O escribe *saltar* para omitir la encuesta._"
 )
 
+_DISCOVERY_MAP = {
+    '1': 'referral',
+    '2': 'google',
+    '3': 'instagram',
+    '4': 'whatsapp_groups',
+    '5': 'youtube',
+    '6': 'flyer',
+}
+
 
 class FeedbackManager:
     """Manages the NPS feedback survey lifecycle."""
@@ -79,138 +94,63 @@ class FeedbackManager:
             self.db = None
 
     # ------------------------------------------------------------------
-    # Cron helpers
+    # Route-triggered survey
     # ------------------------------------------------------------------
 
-    def find_eligible_users(self) -> list[str]:
+    def trigger_survey_after_route(self, identifier: str, phone_number_id: str) -> bool:
         """
-        Return phone numbers of users eligible for a survey:
-          - Account created >= 3 days ago
-          - At least 1 route used in their lifetime
-          - No existing non-completed/skipped survey
-          - User not soft-deleted
+        Called right after the user's 3rd successful route optimization.
+        Creates a survey record and immediately sends Q1 as a follow-up message.
+        Returns True if the survey was sent, False otherwise.
         """
-        if not self.db:
-            return []
-        try:
-            with self.db.get_session() as session:
-                cutoff = datetime.now(timezone.utc) - timedelta(days=3)
-
-                # Users who have ever had a survey (any status) — one survey per user, ever
-                surveyed_user_ids = (
-                    session.query(FeedbackSurvey.user_id)
-                    .subquery()
-                )
-
-                eligible = (
-                    session.query(User)
-                    .filter(
-                        User.created_at <= cutoff,
-                        User.routes_used_lifetime >= 1,
-                        User.deleted_at.is_(None),
-                        User.user_id.notin_(surveyed_user_ids),
-                    )
-                    .all()
-                )
-                identifiers = [u.phone_number or u.bsuid for u in eligible]
-                logger.info(f"Feedback cron: {len(identifiers)} eligible users")
-                return identifiers
-        except Exception as e:
-            logger.error(f"find_eligible_users error: {e}", exc_info=True)
-            return []
-
-    def create_pending_survey(self, phone_number: str) -> bool:
-        """Insert a new survey row with status='pending'. Returns True on success."""
         if not self.db:
             return False
         try:
             with self.db.get_session() as session:
-                user = User.find_by_identifier(session, phone_number)
+                user = User.find_by_identifier(session, identifier)
                 if not user:
-                    logger.warning(f"create_pending_survey: no user found for {phone_number}")
+                    return False
+                if user.routes_used_lifetime != 3:
+                    return False
+                existing = session.query(FeedbackSurvey).filter(
+                    FeedbackSurvey.user_id == user.user_id
+                ).first()
+                if existing:
                     return False
                 survey = FeedbackSurvey(
                     user_id=user.user_id,
-                    phone_number=user.phone_number,   # NULL for BSUID-only users
-                    status='pending',
+                    phone_number=user.phone_number,
+                    status='sent',
                     current_step='q1',
+                    sent_at=datetime.now(timezone.utc),
                 )
                 session.add(survey)
                 session.commit()
-                logger.info(f"Created pending survey for {phone_number}")
-                return True
+
+            # Send Q1 in a background thread with a short delay so the route
+            # result message (sent by the webhook handler after this returns)
+            # always reaches the user first.
+            def _send_q1():
+                import time
+                time.sleep(5)
+                try:
+                    from .message_sender import MessageSender
+                    response = {
+                        'to_number': identifier,
+                        'phone_number_id': phone_number_id,
+                        'message_text': MSG_Q1,
+                        'timestamp': datetime.now().isoformat(),
+                    }
+                    MessageSender().send_reply(response)
+                    logger.info(f"Survey Q1 sent after 3rd route for {identifier}")
+                except Exception as e:
+                    logger.error(f"Survey Q1 background send failed for {identifier}: {e}", exc_info=True)
+
+            threading.Thread(target=_send_q1, daemon=True).start()
+            return True
         except Exception as e:
-            logger.error(f"create_pending_survey({phone_number}) error: {e}", exc_info=True)
+            logger.error(f"trigger_survey_after_route({identifier}) error: {e}", exc_info=True)
             return False
-
-    def send_q1(self, phone_number: str, sender) -> bool:
-        """
-        Attempt to deliver Q1 to the user.
-
-        For Twilio — send immediately (no 24h window restriction).
-        For Meta — only send if user is within a 24h conversation window;
-                   otherwise leave status='pending' for next inbound intercept.
-
-        Args:
-            phone_number: E.164 phone number
-            sender: MessageSender instance (or None to skip actual send)
-
-        Returns:
-            True if Q1 was sent, False if left as pending.
-        """
-        from ..config.config import Config
-        config = Config()
-
-        should_send = True
-
-        if config.MESSAGING_PROVIDER == 'meta':
-            # Check conversation window
-            try:
-                from ..utils.conversation_tracker_db import ConversationTracker
-                tracker = ConversationTracker()
-                in_window = tracker.is_within_window(phone_number)
-                if not in_window:
-                    logger.info(
-                        f"Meta: {phone_number} outside 24h window — survey left as pending"
-                    )
-                    should_send = False
-            except Exception as e:
-                logger.warning(f"Could not check conversation window for {phone_number}: {e}")
-                should_send = False
-
-        if should_send and sender:
-            try:
-                from .message_sender import MessageSender
-                # Build a minimal response dict that MessageSender understands
-                response = {
-                    'to_number': phone_number,
-                    'phone_number_id': config.WHATSAPP_PHONE_NUMBER_ID,
-                    'message_text': MSG_Q1,
-                    'timestamp': datetime.now().isoformat(),
-                }
-                sender.send_reply(response)
-                self._mark_sent(phone_number)
-                logger.info(f"Q1 sent to {phone_number}")
-                return True
-            except Exception as e:
-                logger.error(f"send_q1({phone_number}) send error: {e}", exc_info=True)
-                return False
-
-        return False
-
-    def _mark_sent(self, phone_number: str) -> None:
-        """Update survey status to 'sent' after Q1 is delivered."""
-        if not self.db:
-            return
-        try:
-            with self.db.get_session() as session:
-                survey = self._get_active_survey_obj(session, phone_number)
-                if survey:
-                    survey.status = 'sent'
-                    survey.sent_at = datetime.now(timezone.utc)
-                    session.commit()
-        except Exception as e:
-            logger.error(f"_mark_sent({phone_number}) error: {e}", exc_info=True)
 
     # ------------------------------------------------------------------
     # Inbound message handling
@@ -219,9 +159,8 @@ class FeedbackManager:
     def get_active_survey(self, phone_number: str) -> Optional[dict]:
         """
         Return the active survey data for a user, or None.
-
-        A survey is 'active' if status is in ('pending','sent','in_progress').
-        This is called by message_processor to decide whether to intercept.
+        A survey is 'active' if status is in ('sent', 'in_progress').
+        Called by message_processor to decide whether to intercept.
         """
         if not self.db:
             return None
@@ -242,12 +181,7 @@ class FeedbackManager:
     def handle_incoming(self, phone_number: str, message_text: str, phone_number_id: str) -> Optional[str]:
         """
         Process an inbound message during an active survey.
-
         Returns the reply string to send, or None if no survey is active.
-
-        Intercept priority:
-        1. If status='pending' → this is the user's first message since cron — deliver Q1 now.
-        2. If status='sent' or 'in_progress' → route to current step handler.
         """
         if not self.db:
             return None
@@ -259,15 +193,7 @@ class FeedbackManager:
 
                 text = message_text.strip()
 
-                # Pending → deliver Q1 now (Meta outside-window case)
-                if survey.status == 'pending':
-                    survey.status = 'sent'
-                    survey.sent_at = datetime.now(timezone.utc)
-                    session.commit()
-                    logger.info(f"Pending survey activated on inbound message for {phone_number}")
-                    return MSG_Q1
-
-                # Active survey — check for global skip
+                # Global skip
                 if text.lower() == 'saltar':
                     survey.status = 'skipped'
                     survey.skipped_at = datetime.now(timezone.utc)
@@ -275,7 +201,6 @@ class FeedbackManager:
                     logger.info(f"Survey skipped by {phone_number} at step {survey.current_step}")
                     return MSG_SKIPPED
 
-                # Route to current step
                 step = survey.current_step
 
                 if step == 'q1':
@@ -315,48 +240,44 @@ class FeedbackManager:
         return MSG_Q3
 
     def _handle_q3(self, session, survey: FeedbackSurvey, text: str) -> str:
-        willing, price = self._parse_q3(text)
-        survey.willing_to_pay = willing
-        if price:
-            survey.price_suggestion = price
+        discovery = self._parse_q3(text)
+        # Store discovery source in price_suggestion (no CHECK constraint).
+        # willing_to_pay stays NULL — its CHECK constraint (si/no/quizas) cannot hold
+        # discovery source values and a migration is not needed here.
+        survey.price_suggestion = discovery
         survey.current_step = 'done'
         survey.status = 'completed'
         survey.completed_at = datetime.now(timezone.utc)
         session.commit()
         logger.info(
-            f"Survey completed for {survey.phone_number}: "
-            f"nps={survey.nps_score}, willing={willing}"
+            f"Survey completed for {survey.phone_number or survey.user_id}: "
+            f"nps={survey.nps_score}, discovery={discovery}"
         )
         return MSG_CLOSING
 
-    def _parse_q3(self, text: str) -> tuple[str, Optional[str]]:
+    def _parse_q3(self, text: str) -> str:
         """
-        Parse Q3 response. Returns (willing_to_pay, price_suggestion).
-
-        Accepted formats:
-          'no'             → ('no', None)
-          'quizas'         → ('quizas', None)
-          'si'             → ('si', None)
-          'si 5€/mes'      → ('si', '5€/mes')
-          'si 0.50€'       → ('si', '0.50€')
+        Parse Q3 discovery-source response. Returns a short string key.
+        Accepts digits 1–6 or keyword fallbacks. Unknown → 'other'.
         """
-        t = text.strip().lower()
-
-        if t == 'no' or t.startswith('no '):
-            return 'no', None
-
-        if t in ('quizas', 'quizás', 'quiza', 'quizá', 'tal vez', 'talvez'):
-            return 'quizas', None
-
-        if t == 'si' or t in ('sí',):
-            return 'si', None
-
-        if t.startswith('si ') or t.startswith('sí '):
-            price = text.strip()[3:].strip()  # preserve original casing for price
-            return 'si', price[:100] if price else None
-
-        # Fallback: store raw as quizas with price_suggestion holding the raw text
-        return 'quizas', text[:100]
+        t = text.strip()
+        if t in _DISCOVERY_MAP:
+            return _DISCOVERY_MAP[t]
+        # Keyword fallback for partial matches
+        tl = t.lower()
+        if 'google' in tl or 'web' in tl or 'busq' in tl:
+            return 'google'
+        if 'instagram' in tl or 'insta' in tl:
+            return 'instagram'
+        if 'whatsapp' in tl or 'facebook' in tl or 'grupo' in tl:
+            return 'whatsapp_groups'
+        if 'youtube' in tl or 'video' in tl:
+            return 'youtube'
+        if 'cartel' in tl or 'flyer' in tl or 'anuncio' in tl:
+            return 'flyer'
+        if 'recom' in tl or 'amigo' in tl or 'conocido' in tl:
+            return 'referral'
+        return f'other:{t[:80]}' if t else 'other'
 
     # ------------------------------------------------------------------
     # Internal helpers
