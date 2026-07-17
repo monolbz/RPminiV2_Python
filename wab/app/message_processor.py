@@ -190,10 +190,18 @@ class MessageProcessor:
             addresses, error = address_parser.parse_addresses(message_body)
 
             if addresses or error:
+                if not addresses:
+                    # Parse error, no valid addresses — return the format hint directly.
+                    # Don't enter _process_route_request: check_route_allowed runs first and
+                    # returns a misleading "access check failed" for users with no DB row yet.
+                    logger.warning(f"Address parse error (no account created): {error}")
+                    return self._create_response(from_number, phone_number_id,
+                                                 self._format_error_for_user(error))
+
                 # Implied consent: the act of sending an address list is consent (GDPR-relax flow).
                 # Record it before _process_route_request so the User row + tier exist for check_route_allowed.
                 first_route_consent = False
-                if addresses and not consent_manager.has_consent(from_number):
+                if not consent_manager.has_consent(from_number):
                     first_route_consent = consent_manager.save_consent(
                         from_number, consent_given=True,
                         user_agent='implied:first_address_list', language='es'
@@ -201,7 +209,7 @@ class MessageProcessor:
                     if not first_route_consent:
                         logger.error(f"Implied consent save failed for {from_number}; proceeding anyway")
 
-                logger.info("Processing as route request (valid addresses or parsing error)")
+                logger.info("Processing as route request")
                 return self._process_route_request(
                     message_body, from_number, phone_number_id, display_name,
                     append_privacy_footnote=first_route_consent
