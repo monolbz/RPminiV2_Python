@@ -333,8 +333,10 @@ class MessageProcessor:
                 summary, maps_url = route_bridge.format_route_result_parts(result, phone_number=from_number)
                 if maps_url:
                     from .message_sender import MessageSender
-                    MessageSender().send_reply(self._create_response(from_number, phone_number_id, summary))
-                    return self._create_response(from_number, phone_number_id, maps_url + _privacy_footnote)
+                    MessageSender().send_reply(self._create_response(
+                        from_number, phone_number_id, summary + _privacy_footnote
+                    ))
+                    return self._create_response(from_number, phone_number_id, maps_url)
                 # Error or no URL — fall through to single message
                 return self._create_response(from_number, phone_number_id, summary + _privacy_footnote)
 
