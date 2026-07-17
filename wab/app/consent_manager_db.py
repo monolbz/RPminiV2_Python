@@ -56,7 +56,7 @@ class ConsentManager:
     CONSENT_RETENTION_YEARS = 3
 
     # Current consent version (increment when consent text changes)
-    CONSENT_VERSION = "1.0"
+    CONSENT_VERSION = "2.0"
 
     def __init__(self, database_url: Optional[str] = None):
         """
